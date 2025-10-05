@@ -30,6 +30,8 @@ add_library(fast_alloc STATIC
         src/pool_allocator.cpp
         src/stack_allocator.cpp
         src/freelist_allocator.cpp
+        src/threadsafe_pool_allocator.h
+        src/threadsafe_pool_allocator.cpp
 )
 
 target_include_directories(fast_alloc PUBLIC
@@ -54,6 +56,7 @@ if (BUILD_TESTS)
             tests/test_pool.cpp
             tests/test_stack.cpp
             tests/test_freelist.cpp
+            tests/test_threadsafe_pool.cpp
 
     )
 
