@@ -36,6 +36,6 @@ namespace fast_alloc
         void* memory_;
         void* current_;
 
-        [[nodiscard]] std::size_t align_forward(std::size_t address, std::size_t alignment) const noexcept;
+        [[nodiscard]] static std::size_t align_forward(std::size_t address, std::size_t alignment) noexcept;
     };
 } // namespace fast_alloc

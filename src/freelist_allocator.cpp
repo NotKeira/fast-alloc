@@ -1,11 +1,16 @@
 #include "freelist_allocator.h"
-#include <malloc.h>
 #include <cassert>
-// #include <algorithm>
+#include <algorithm>
+
+#ifdef _WIN32
+#include <malloc.h>
+#else
+#include <cstdlib>
+#endif
 
 namespace fast_alloc
 {
-    FreeListAllocator::FreeListAllocator(std::size_t size, FreeListStrategy strategy)
+    FreeListAllocator::FreeListAllocator(const std::size_t size, const FreeListStrategy strategy)
         : size_(size)
           , used_memory_(0)
           , num_allocations_(0)
@@ -15,7 +20,11 @@ namespace fast_alloc
     {
         assert(size > sizeof(FreeBlock) && "Size must be larger than FreeBlock");
 
+#ifdef _WIN32
         memory_ = _aligned_malloc(size_, alignof(std::max_align_t));
+#else
+        memory_ = std::aligned_alloc(alignof(std::max_align_t), size_);
+#endif
         assert(memory_ && "Failed to allocate memory");
 
         // Initialise with one large free block
@@ -28,7 +37,11 @@ namespace fast_alloc
     {
         if (memory_)
         {
+#ifdef _WIN32
             _aligned_free(memory_);
+#else
+            std::free(memory_);
+#endif
         }
     }
 
@@ -53,7 +66,11 @@ namespace fast_alloc
         {
             if (memory_)
             {
+#ifdef _WIN32
                 _aligned_free(memory_);
+#else
+                std::free(memory_);
+#endif
             }
 
             size_ = other.size_;
@@ -72,7 +89,7 @@ namespace fast_alloc
         return *this;
     }
 
-    void* FreeListAllocator::allocate(std::size_t size, std::size_t alignment)
+    void* FreeListAllocator::allocate(const std::size_t size, const std::size_t alignment)
     {
         assert(size > 0 && "Allocation size must be greater than zero");
         assert(memory_ && "Allocator not initialised");
@@ -87,13 +104,7 @@ namespace fast_alloc
         // Search for suitable block
         while (current_block)
         {
-            std::size_t adjustment = 0;
-            // std::size_t aligned_address = align_forward_with_header(
-            //     reinterpret_cast<std::size_t>(current_block),
-            //     alignment,
-            //     sizeof(AllocationHeader),
-            //     adjustment
-            // );
+            constexpr std::size_t adjustment = 0;
 
             if (const std::size_t total_size = size + adjustment; current_block->size >= total_size)
             {
@@ -104,9 +115,9 @@ namespace fast_alloc
                     best_prev = prev_block;
                     break;
                 }
-                else if (strategy_ == FreeListStrategy::BestFit)
+                if (strategy_ == FreeListStrategy::BestFit)
                 {
-                    // Use best fit - find smallest suitable block
+                    // Use best fit - find the smallest suitable block
                     if (current_block->size < best_size)
                     {
                         best_size = current_block->size;
@@ -127,19 +138,19 @@ namespace fast_alloc
 
         // Calculate adjustment again for the selected block
         std::size_t adjustment = 0;
-        std::size_t aligned_address = align_forward_with_header(
+        const std::size_t aligned_address = align_forward_with_header(
             reinterpret_cast<std::size_t>(best_block),
             alignment,
             sizeof(AllocationHeader),
             adjustment
         );
 
-        std::size_t total_size = size + adjustment;
+        const std::size_t total_size = size + adjustment;
 
         // If remaining space is large enough, split the block
         if (best_block->size - total_size > sizeof(FreeBlock))
         {
-            FreeBlock* new_block = reinterpret_cast<FreeBlock*>(
+            auto* new_block = reinterpret_cast<FreeBlock*>(
                 reinterpret_cast<std::size_t>(best_block) + total_size
             );
             new_block->size = best_block->size - total_size;
@@ -168,7 +179,7 @@ namespace fast_alloc
         }
 
         // Write allocation header
-        AllocationHeader* header = reinterpret_cast<AllocationHeader*>(
+        auto* header = reinterpret_cast<AllocationHeader*>(
             aligned_address - sizeof(AllocationHeader)
         );
         header->size = total_size;
@@ -191,16 +202,16 @@ namespace fast_alloc
         assert(num_allocations_ > 0 && "Deallocating from empty allocator");
 
         // Get allocation header
-        std::size_t block_address = reinterpret_cast<std::size_t>(ptr);
-        AllocationHeader* header = reinterpret_cast<AllocationHeader*>(
+        const auto block_address = reinterpret_cast<std::size_t>(ptr);
+        const auto* header = reinterpret_cast<AllocationHeader*>(
             block_address - sizeof(AllocationHeader)
         );
 
-        std::size_t block_start = block_address - header->adjustment;
-        std::size_t block_size = header->size;
+        const std::size_t block_start = block_address - header->adjustment;
+        const std::size_t block_size = header->size;
 
         // Create new free block
-        FreeBlock* new_block = reinterpret_cast<FreeBlock*>(block_start);
+        auto* new_block = reinterpret_cast<FreeBlock*>(block_start);
         new_block->size = block_size;
         new_block->next = nullptr;
 
@@ -241,10 +252,9 @@ namespace fast_alloc
         // Merge with next block if adjacent
         if (current->next)
         {
-            std::size_t current_end = reinterpret_cast<std::size_t>(current) + current->size;
-            std::size_t next_start = reinterpret_cast<std::size_t>(current->next);
+            const std::size_t current_end = reinterpret_cast<std::size_t>(current) + current->size;
 
-            if (current_end == next_start)
+            if (const auto next_start = reinterpret_cast<std::size_t>(current->next); current_end == next_start)
             {
                 current->size += current->next->size;
                 current->next = current->next->next;
@@ -254,10 +264,9 @@ namespace fast_alloc
         // Merge with previous block if adjacent
         if (previous)
         {
-            std::size_t prev_end = reinterpret_cast<std::size_t>(previous) + previous->size;
-            std::size_t current_start = reinterpret_cast<std::size_t>(current);
+            const std::size_t prev_end = reinterpret_cast<std::size_t>(previous) + previous->size;
 
-            if (prev_end == current_start)
+            if (const auto current_start = reinterpret_cast<std::size_t>(current); prev_end == current_start)
             {
                 previous->size += current->size;
                 previous->next = current->next;
@@ -266,18 +275,17 @@ namespace fast_alloc
     }
 
     std::size_t FreeListAllocator::align_forward_with_header(
-        std::size_t address,
-        std::size_t alignment,
-        std::size_t header_size,
+        const std::size_t address,
+        const std::size_t alignment,
+        const std::size_t header_size,
         std::size_t& adjustment
-    ) const noexcept
+    ) noexcept
     {
         assert((alignment & (alignment - 1)) == 0 && "Alignment must be power of 2");
 
         std::size_t aligned_address = address + header_size;
 
-        std::size_t modulo = aligned_address & (alignment - 1);
-        if (modulo != 0)
+        if (const std::size_t modulo = aligned_address & (alignment - 1); modulo != 0)
         {
             aligned_address += alignment - modulo;
         }

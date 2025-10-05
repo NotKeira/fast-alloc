@@ -8,7 +8,7 @@ namespace fast_alloc
     enum class FreeListStrategy
     {
         FirstFit, // Find first block that fits
-        BestFit // Find smallest block that fits
+        BestFit // Find the smallest block that fits
     };
 
     class FreeListAllocator
@@ -53,12 +53,12 @@ namespace fast_alloc
         void* memory_;
         FreeBlock* free_blocks_;
 
-        void coalescence(FreeBlock* previous, FreeBlock* current);
-        [[nodiscard]] std::size_t align_forward_with_header(
+        static void coalescence(FreeBlock* previous, FreeBlock* current);
+        static std::size_t align_forward_with_header(
             std::size_t address,
             std::size_t alignment,
             std::size_t header_size,
             std::size_t& adjustment
-        ) const noexcept;
+        ) noexcept;
     };
 } // namespace fast_alloc
