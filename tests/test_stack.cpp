@@ -21,6 +21,10 @@ TEST_CASE("StackAllocator basic allocation", "[stack]")
         void* ptr2 = stack.allocate(128);
         void* ptr3 = stack.allocate(32);
 
+        (void)ptr1;
+        (void)ptr2;
+        (void)ptr3;
+
         REQUIRE(ptr1 != nullptr);
         REQUIRE(ptr2 != nullptr);
         REQUIRE(ptr3 != nullptr);
@@ -37,6 +41,9 @@ TEST_CASE("StackAllocator reset", "[stack]")
         void* ptr1 = stack.allocate(100);
         void* ptr2 = stack.allocate(200);
 
+        (void)ptr1;
+        (void)ptr2;
+
         REQUIRE(stack.used() > 0);
 
         stack.reset();
@@ -52,6 +59,10 @@ TEST_CASE("StackAllocator reset", "[stack]")
 
         void* ptr2 = stack.allocate(200);
         void* ptr3 = stack.allocate(150);
+
+        (void)ptr1;
+        (void)ptr2;
+        (void)ptr3;
 
         std::size_t used_before = stack.used();
         REQUIRE(used_before >= 450);
