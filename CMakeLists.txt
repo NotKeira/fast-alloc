@@ -26,7 +26,15 @@ endif ()
 option(BUILD_TESTS "Build unit tests" ON)
 option(BUILD_BENCHMARKS "Build benchmarks" ON)
 
-add_subdirectory(src)
+add_library(fast_alloc STATIC
+        src/pool_allocator.cpp
+        src/stack_allocator.cpp
+        src/freelist_allocator.cpp
+)
+
+target_include_directories(fast_alloc PUBLIC
+        ${CMAKE_SOURCE_DIR}/src
+)
 
 if (BUILD_TESTS)
     enable_testing()
