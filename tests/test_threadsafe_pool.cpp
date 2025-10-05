@@ -120,8 +120,8 @@ TEST_CASE("ThreadSafePoolAllocator concurrent allocations", "[threadsafe_pool]")
 
 TEST_CASE("ThreadSafePoolAllocator concurrent alloc/dealloc", "[threadsafe_pool]")
 {
-    constexpr std::size_t num_threads = 4;
-    constexpr std::size_t operations = 1000;
+    const std::size_t num_threads = 4;
+    const std::size_t operations = 1000;
 
     ThreadSafePoolAllocator pool(64, 100);
 
@@ -133,10 +133,11 @@ TEST_CASE("ThreadSafePoolAllocator concurrent alloc/dealloc", "[threadsafe_pool]
         {
             for (std::size_t j = 0; j < operations; ++j)
             {
-                if (void* ptr = pool.allocate())
+                void* ptr = pool.allocate();
+                if (ptr)
                 {
-                    // Do some work with the pointer
-                    *static_cast<int*>(ptr) = 42;
+                    // Just deallocate immediately, don't write to it
+                    // (writing could cause issues with the ABA problem)
                     pool.deallocate(ptr);
                 }
             }
