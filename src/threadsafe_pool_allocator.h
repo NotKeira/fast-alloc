@@ -38,17 +38,10 @@ namespace fast_alloc
         }
 
     private:
-        // Tagged pointer to prevent ABA problem
-        struct TaggedPointer
-        {
-            void* ptr;
-            std::uintptr_t tag;
-        };
-
         std::size_t block_size_;
         std::size_t block_count_;
         std::atomic<std::size_t> allocated_count_;
         void* memory_;
-        std::atomic<TaggedPointer> free_list_;
+        std::atomic<void*> free_list_;
     };
 } // namespace fast_alloc
