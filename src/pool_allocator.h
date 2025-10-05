@@ -3,9 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace fast_alloc {
-
-    class PoolAllocator {
+namespace fast_alloc
+{
+    class PoolAllocator
+    {
     public:
         PoolAllocator(std::size_t block_size, std::size_t block_count);
         ~PoolAllocator();
@@ -33,5 +34,4 @@ namespace fast_alloc {
         void* memory_;
         void* free_list_;
     };
-
 } // namespace fast_alloc

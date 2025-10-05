@@ -3,99 +3,109 @@
 #include <cassert>
 #include <cstring>
 
-namespace fast_alloc {
-/**
-*
-* @param block_size
-* @param block_count
-*/
-PoolAllocator::PoolAllocator(std::size_t block_size, std::size_t block_count):
-    block_size_(block_size), block_count_(block_count), allocated_count_(0), memory_(nullptr), free_list_(nullptr) {
-    
-    assert(block_size >= sizeof(void*) && "Block size must be at least pointer size");
-    assert(block_count > 0 && "Block count must be greater than zero");
+namespace fast_alloc
+{
+    /**
+    *
+    * @param block_size
+    * @param block_count
+    */
+    PoolAllocator::PoolAllocator(std::size_t block_size, std::size_t block_count) :
+        block_size_(block_size), block_count_(block_count), allocated_count_(0), memory_(nullptr), free_list_(nullptr)
+    {
+        assert(block_size >= sizeof(void*) && "Block size must be at least pointer size");
+        assert(block_count > 0 && "Block count must be greater than zero");
 
-    // Allocate the memory pool
-    memory_ = _aligned_malloc(block_size_ * block_count_, alignof(std::max_align_t));
-    assert(memory_ && "Failed to allocate memory pool");
+        // Allocate the memory pool
+        memory_ = _aligned_malloc(block_size_ * block_count_, alignof(std::max_align_t));
+        assert(memory_ && "Failed to allocate memory pool");
 
-    // Initialize free list - each block points to the next
-    std::byte* block = static_cast<std::byte*>(memory_);
-    free_list_ = block;
+        // Initialize free list - each block points to the next
+        std::byte* block = static_cast<std::byte*>(memory_);
+        free_list_ = block;
 
-    for (std::size_t i = 0; i < block_count_ - 1; ++i) {
-        void** current = reinterpret_cast<void**>(block);
-        block += block_size_;
-        *current = block;
-    }
-
-    // Last block points to nullptr
-    void** last = reinterpret_cast<void**>(block);
-    *last = nullptr;
-}
-
-PoolAllocator::~PoolAllocator() {
-    if (memory_) {
-        _aligned_free(memory_);
-    }
-}
-
-PoolAllocator::PoolAllocator(PoolAllocator&& other) noexcept
-    : block_size_(other.block_size_)
-    , block_count_(other.block_count_)
-    , allocated_count_(other.allocated_count_)
-    , memory_(other.memory_)
-    , free_list_(other.free_list_) {
-    
-    other.memory_ = nullptr;
-    other.free_list_ = nullptr;
-    other.allocated_count_ = 0;
-}
-
-PoolAllocator& PoolAllocator::operator=(PoolAllocator&& other) noexcept {
-    if (this != &other) {
-        if (memory_) {
-            _aligned_free(memory_);
+        for (std::size_t i = 0; i < block_count_ - 1; ++i)
+        {
+            void** current = reinterpret_cast<void**>(block);
+            block += block_size_;
+            *current = block;
         }
 
-        block_size_ = other.block_size_;
-        block_count_ = other.block_count_;
-        allocated_count_ = other.allocated_count_;
-        memory_ = other.memory_;
-        free_list_ = other.free_list_;
+        // Last block points to nullptr
+        void** last = reinterpret_cast<void**>(block);
+        *last = nullptr;
+    }
 
+    PoolAllocator::~PoolAllocator()
+    {
+        if (memory_)
+        {
+            _aligned_free(memory_);
+        }
+    }
+
+    PoolAllocator::PoolAllocator(PoolAllocator&& other) noexcept
+        : block_size_(other.block_size_)
+          , block_count_(other.block_count_)
+          , allocated_count_(other.allocated_count_)
+          , memory_(other.memory_)
+          , free_list_(other.free_list_)
+    {
         other.memory_ = nullptr;
         other.free_list_ = nullptr;
         other.allocated_count_ = 0;
     }
-    return *this;
-}
 
-void* PoolAllocator::allocate() {
-    if (!free_list_) {
-        return nullptr; // Pool exhausted
+    PoolAllocator& PoolAllocator::operator=(PoolAllocator&& other) noexcept
+    {
+        if (this != &other)
+        {
+            if (memory_)
+            {
+                _aligned_free(memory_);
+            }
+
+            block_size_ = other.block_size_;
+            block_count_ = other.block_count_;
+            allocated_count_ = other.allocated_count_;
+            memory_ = other.memory_;
+            free_list_ = other.free_list_;
+
+            other.memory_ = nullptr;
+            other.free_list_ = nullptr;
+            other.allocated_count_ = 0;
+        }
+        return *this;
     }
 
-    // Pop from free list
-    void* block = free_list_;
-    free_list_ = *static_cast<void**>(free_list_);
-    ++allocated_count_;
+    void* PoolAllocator::allocate()
+    {
+        if (!free_list_)
+        {
+            return nullptr; // Pool exhausted
+        }
 
-    return block;
-}
+        // Pop from free list
+        void* block = free_list_;
+        free_list_ = *static_cast<void**>(free_list_);
+        ++allocated_count_;
 
-void PoolAllocator::deallocate(void* ptr) {
-    if (!ptr) {
-        return;
+        return block;
     }
 
-    assert(allocated_count_ > 0 && "Deallocating from empty pool");
+    void PoolAllocator::deallocate(void* ptr)
+    {
+        if (!ptr)
+        {
+            return;
+        }
 
-    // Push back to free list
-    void** block = static_cast<void**>(ptr);
-    *block = free_list_;
-    free_list_ = ptr;
-    --allocated_count_;
-}
+        assert(allocated_count_ > 0 && "Deallocating from empty pool");
 
+        // Push back to free list
+        void** block = static_cast<void**>(ptr);
+        *block = free_list_;
+        free_list_ = ptr;
+        --allocated_count_;
+    }
 } // namespace fast_alloc
