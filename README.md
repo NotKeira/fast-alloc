@@ -1,7 +1,8 @@
 # fast-alloc
 
-High-performance custom memory allocators with comprehensive benchmarks for game development and real-time applications.
+![CI](https://github.com/NotKeira/fast-alloc/workflows/CI/badge.svg)
 
+High-performance custom memory allocators with comprehensive benchmarks for game development and real-time applications.
 ## Allocators
 
 - **Pool Allocator**: Fixed-size block allocation for homogeneous objects (particles, game entities)

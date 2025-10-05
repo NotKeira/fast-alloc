@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        build_type: [ Debug, Release ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }}
+
+      - name: Run Tests
+        working-directory: build
+        run: ctest -C ${{ matrix.build_type }} --output-on-failure
+
+      - name: Run Benchmarks (Release only)
+        if: matrix.build_type == 'Release'
+        working-directory: build
+        run: |
+          .\Release\alloc_benchmarks.exe --benchmark_min_time=0.1
+
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [ Debug, Release ]
+        compiler:
+          - { cc: gcc-13, cxx: g++-13 }
+          - { cc: clang-16, cxx: clang++-16 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Compilers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.compiler.cxx }}
+
+      - name: Configure CMake
+        env:
+          CC: ${{ matrix.compiler.cc }}
+          CXX: ${{ matrix.compiler.cxx }}
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run Tests
+        working-directory: build
+        run: ctest --output-on-failure
+
+      - name: Run Benchmarks (Release only)
+        if: matrix.build_type == 'Release'
+        working-directory: build
+        run: ./alloc_benchmarks --benchmark_min_time=0.1
+
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        build_type: [ Debug, Release ]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run Tests
+        working-directory: build
+        run: ctest --output-on-failure
+
+      - name: Run Benchmarks (Release only)
+        if: matrix.build_type == 'Release'
+        working-directory: build
+        run: ./alloc_benchmarks --benchmark_min_time=0.1
