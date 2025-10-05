@@ -20,7 +20,7 @@ namespace fast_alloc
         memory_ = _aligned_malloc(block_size_ * block_count_, alignof(std::max_align_t));
         assert(memory_ && "Failed to allocate memory pool");
 
-        // Initialize free list - each block points to the next
+        // Initialise free list - each block points to the next
         std::byte* block = static_cast<std::byte*>(memory_);
         free_list_ = block;
 
