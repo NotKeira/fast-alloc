@@ -54,6 +54,7 @@ if (BUILD_TESTS)
             tests/test_pool.cpp
             tests/test_stack.cpp
             tests/test_freelist.cpp
+
     )
 
     target_link_libraries(alloc_tests PRIVATE
