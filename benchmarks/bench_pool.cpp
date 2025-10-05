@@ -68,17 +68,7 @@ static void BM_PoolAllocator_BulkAllocate(benchmark::State& state)
     state.SetItemsProcessed(state.iterations() * num_allocs);
 }
 
-BENCHMARK(BM_PoolAllocator_BulkAllocate) -> Arg(
-100
-)
-->
-Arg (
-1000
-)
-->
-Arg (
-5000
-);
+BENCHMARK(BM_PoolAllocator_BulkAllocate)->Arg(100)->Arg(1000)->Arg(5000);
 
 static void BM_NewDelete_BulkAllocate(benchmark::State& state)
 {
@@ -106,14 +96,4 @@ static void BM_NewDelete_BulkAllocate(benchmark::State& state)
     state.SetItemsProcessed(state.iterations() * num_allocs);
 }
 
-BENCHMARK(BM_NewDelete_BulkAllocate) -> Arg(
-100
-)
-->
-Arg (
-1000
-)
-->
-Arg (
-5000
-);
+BENCHMARK(BM_NewDelete_BulkAllocate)->Arg(100)->Arg(1000)->Arg(5000);

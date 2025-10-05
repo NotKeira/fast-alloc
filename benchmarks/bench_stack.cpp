@@ -59,14 +59,17 @@ static void BM_StackAllocator_FramePattern(benchmark::State& state)
 }
 
 BENCHMARK(BM_StackAllocator_FramePattern) -> Arg(
+
 10
 )
 ->
 Arg (
+
 100
 )
 ->
 Arg (
+
 1000
 );
 
@@ -97,14 +100,17 @@ static void BM_Malloc_FramePattern(benchmark::State& state)
 }
 
 BENCHMARK(BM_Malloc_FramePattern) -> Arg(
+
 10
 )
 ->
 Arg (
+
 100
 )
 ->
 Arg (
+
 1000
 );
 
@@ -126,13 +132,16 @@ static void BM_StackAllocator_AlignedAllocate(benchmark::State& state)
 }
 
 BENCHMARK(BM_StackAllocator_AlignedAllocate) -> Arg(
+
 16
 )
 ->
 Arg (
+
 32
 )
 ->
 Arg (
+
 64
 );
