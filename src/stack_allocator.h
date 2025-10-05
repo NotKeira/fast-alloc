@@ -3,9 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace fast_alloc {
-
-    class StackAllocator {
+namespace fast_alloc
+{
+    class StackAllocator
+    {
     public:
         explicit StackAllocator(std::size_t size);
         ~StackAllocator();
@@ -37,5 +38,4 @@ namespace fast_alloc {
 
         [[nodiscard]] std::size_t align_forward(std::size_t address, std::size_t alignment) const noexcept;
     };
-
 } // namespace fast_alloc
