@@ -249,7 +249,7 @@ Memory layout:
 **Best-Fit Strategy:**
 
 - Traverse entire free list
-- Use smallest block that fits
+- Use the smallest block that fits
 - Slower but reduces fragmentation
 
 **Block Splitting:**
@@ -408,11 +408,11 @@ All benchmarks run on:
 ### Production Considerations
 
 **Thread Safety:**
-Current implementations are single-threaded. For multi-threaded use:
+Current implementations are single-threaded. For multithreaded use:
 
 - Add mutex locks (simplest, adds overhead)
 - Use lock-free atomics (complex, high performance)
-- Per-thread allocators (best performance, more memory)
+- Per-thread allocators (the best performance, more memory)
 
 **Debug Features:**
 Production allocators should add:
