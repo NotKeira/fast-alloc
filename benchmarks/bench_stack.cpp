@@ -6,7 +6,7 @@ using namespace fast_alloc;
 // Benchmark stack allocator vs malloc
 static void BM_StackAllocator_Allocate(benchmark::State& state)
 {
-    const std::size_t stack_size = 1024 * 1024; // 1MB
+    constexpr std::size_t stack_size = 1024 * 1024; // 1MB
     StackAllocator stack(stack_size);
 
     for (auto _ : state)
@@ -19,7 +19,7 @@ static void BM_StackAllocator_Allocate(benchmark::State& state)
     state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK (BM_StackAllocator_Allocate);
+BENCHMARK(BM_StackAllocator_Allocate);
 
 static void BM_Malloc_Allocate(benchmark::State& state)
 {
@@ -33,12 +33,12 @@ static void BM_Malloc_Allocate(benchmark::State& state)
     state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK (BM_Malloc_Allocate);
+BENCHMARK(BM_Malloc_Allocate);
 
 // Benchmark frame-based allocation pattern
 static void BM_StackAllocator_FramePattern(benchmark::State& state)
 {
-    const std::size_t stack_size = 1024 * 1024; // 1MB
+    constexpr std::size_t stack_size = 1024 * 1024; // 1MB
     const std::size_t allocs_per_frame = state.range(0);
     StackAllocator stack(stack_size);
 
@@ -58,20 +58,7 @@ static void BM_StackAllocator_FramePattern(benchmark::State& state)
     state.SetItemsProcessed(state.iterations() * allocs_per_frame);
 }
 
-BENCHMARK(BM_StackAllocator_FramePattern) -> Arg(
-
-10
-)
-->
-Arg (
-
-100
-)
-->
-Arg (
-
-1000
-);
+BENCHMARK(BM_StackAllocator_FramePattern)->Arg(10)->Arg(100)->Arg(1000);
 
 static void BM_Malloc_FramePattern(benchmark::State& state)
 {
@@ -99,25 +86,12 @@ static void BM_Malloc_FramePattern(benchmark::State& state)
     state.SetItemsProcessed(state.iterations() * allocs_per_frame);
 }
 
-BENCHMARK(BM_Malloc_FramePattern) -> Arg(
-
-10
-)
-->
-Arg (
-
-100
-)
-->
-Arg (
-
-1000
-);
+BENCHMARK(BM_Malloc_FramePattern)->Arg(10)->Arg(100)->Arg(1000);
 
 // Benchmark aligned allocations
 static void BM_StackAllocator_AlignedAllocate(benchmark::State& state)
 {
-    const std::size_t stack_size = 1024 * 1024;
+    constexpr std::size_t stack_size = 1024 * 1024;
     const std::size_t alignment = state.range(0);
     StackAllocator stack(stack_size);
 
@@ -131,17 +105,4 @@ static void BM_StackAllocator_AlignedAllocate(benchmark::State& state)
     state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK(BM_StackAllocator_AlignedAllocate) -> Arg(
-
-16
-)
-->
-Arg (
-
-32
-)
-->
-Arg (
-
-64
-);
+BENCHMARK(BM_StackAllocator_AlignedAllocate)->Arg(16)->Arg(32)->Arg(64);

@@ -8,7 +8,7 @@ using namespace fast_alloc;
 // Benchmark free list allocator vs malloc
 static void BM_FreeListAllocator_FirstFit(benchmark::State& state)
 {
-    const std::size_t allocator_size = 1024 * 1024; // 1MB
+    constexpr std::size_t allocator_size = 1024 * 1024; // 1MB
     FreeListAllocator allocator(allocator_size, FreeListStrategy::FirstFit);
 
     for (auto _ : state)
@@ -21,11 +21,11 @@ static void BM_FreeListAllocator_FirstFit(benchmark::State& state)
     state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK (BM_FreeListAllocator_FirstFit);
+BENCHMARK(BM_FreeListAllocator_FirstFit);
 
 static void BM_FreeListAllocator_BestFit(benchmark::State& state)
 {
-    const std::size_t allocator_size = 1024 * 1024;
+    constexpr std::size_t allocator_size = 1024 * 1024;
     FreeListAllocator allocator(allocator_size, FreeListStrategy::BestFit);
 
     for (auto _ : state)
@@ -38,7 +38,7 @@ static void BM_FreeListAllocator_BestFit(benchmark::State& state)
     state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK (BM_FreeListAllocator_BestFit);
+BENCHMARK(BM_FreeListAllocator_BestFit);
 
 static void BM_Malloc_Compare(benchmark::State& state)
 {
@@ -52,12 +52,12 @@ static void BM_Malloc_Compare(benchmark::State& state)
     state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK (BM_Malloc_Compare);
+BENCHMARK(BM_Malloc_Compare);
 
 // Benchmark variable-sized allocations
 static void BM_FreeListAllocator_VariableSizes(benchmark::State& state)
 {
-    const std::size_t allocator_size = 1024 * 1024;
+    constexpr std::size_t allocator_size = 1024 * 1024;
     FreeListAllocator allocator(allocator_size, FreeListStrategy::FirstFit);
 
     std::vector<std::size_t> sizes = {16, 32, 64, 128, 256, 512};
@@ -75,16 +75,16 @@ static void BM_FreeListAllocator_VariableSizes(benchmark::State& state)
     state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK (BM_FreeListAllocator_VariableSizes);
+BENCHMARK(BM_FreeListAllocator_VariableSizes);
 
 // Benchmark fragmentation handling
 static void BM_FreeListAllocator_Fragmentation(benchmark::State& state)
 {
-    const std::size_t allocator_size = 1024 * 1024;
-    const std::size_t num_allocs = 100;
+    constexpr std::size_t allocator_size = 1024 * 1024;
 
     for (auto _ : state)
     {
+        constexpr std::size_t num_allocs = 100;
         state.PauseTiming();
         FreeListAllocator allocator(allocator_size, FreeListStrategy::FirstFit);
         std::vector<void*> ptrs;
@@ -118,4 +118,4 @@ static void BM_FreeListAllocator_Fragmentation(benchmark::State& state)
     }
 }
 
-BENCHMARK (BM_FreeListAllocator_Fragmentation);
+BENCHMARK(BM_FreeListAllocator_Fragmentation);
