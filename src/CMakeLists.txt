@@ -1,6 +1,7 @@
 add_library(fast_alloc STATIC
         pool_allocator.cpp
         stack_allocator.cpp
+        freelist_allocator.cpp
 )
 
 target_include_directories(fast_alloc PUBLIC
