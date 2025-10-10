@@ -118,6 +118,22 @@ namespace fast_alloc
 
         assert(allocated_count_ > 0 && "Deallocating from empty pool");
 
+        // Validate pointer is within our memory range
+        const auto ptr_address = reinterpret_cast<std::size_t>(ptr);
+        const auto memory_start = reinterpret_cast<std::size_t>(memory_);
+        const auto memory_end = memory_start + (block_size_ * block_count_);
+
+        assert(ptr_address >= memory_start && ptr_address < memory_end
+            && "Pointer outside pool memory range");
+
+        // Validate pointer is properly aligned to a block boundary
+        assert((ptr_address - memory_start) % block_size_ == 0
+            && "Pointer not aligned to block boundary");
+
+        // Suppress unused variable warnings in release builds
+        (void)ptr_address;
+        (void)memory_end;
+
         // Push back to free list
         const auto block = static_cast<void**>(ptr);
         *block = free_list_;

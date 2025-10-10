@@ -113,7 +113,11 @@ fast-alloc/
 
 ## Usage Examples
 
-### Pool Allocator
+For comprehensive usage examples and patterns, see [docs/USAGE.md](docs/USAGE.md).
+
+### Quick Start
+
+#### Pool Allocator
 
 ```cpp
 #include "pool_allocator.h"
@@ -126,7 +130,7 @@ void* obj = pool.allocate();
 pool.deallocate(obj);
 ```
 
-### Thread-Safe Pool Allocator
+#### Thread-Safe Pool Allocator
 
 ```cpp
 #include "threadsafe_pool_allocator.h"
@@ -146,7 +150,7 @@ t1.join();
 t2.join();
 ```
 
-### Stack Allocator
+#### Stack Allocator
 
 ```cpp
 #include "stack_allocator.h"
@@ -162,7 +166,7 @@ void frame_update() {
 }
 ```
 
-### Free List Allocator
+#### Free List Allocator
 
 ```cpp
 #include "freelist_allocator.h"
@@ -197,6 +201,10 @@ Comprehensive test suite with Catch2:
 - Edge case handling (nullptr, overflow, alignment)
 - Concurrent stress tests for thread-safe variants
 - CI with multiple sanitizers (ASan, TSan, UBSan)
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Licence
 

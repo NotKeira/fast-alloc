@@ -2,6 +2,8 @@
 
 This document explains the design decisions, implementation details, and trade-offs of each allocator in fast-alloc.
 
+For practical usage examples and patterns, see [USAGE.md](USAGE.md).
+
 ## Table of Contents
 
 - [Design Philosophy](#design-philosophy)
