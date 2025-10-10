@@ -102,22 +102,18 @@ TEST_CASE("FreeListAllocator coalescence", "[freelist]")
 {
     FreeListAllocator allocator(4096, FreeListStrategy::FirstFit);
 
-    // Allocate three adjacent blocks
     void* ptr1 = allocator.allocate(100);
     void* ptr2 = allocator.allocate(100);
     void* ptr3 = allocator.allocate(100);
 
     REQUIRE(allocator.num_allocations() == 3);
 
-    // Free middle block
     allocator.deallocate(ptr2);
     REQUIRE(allocator.num_allocations() == 2);
 
-    // Free first block - should coalesce
     allocator.deallocate(ptr1);
     REQUIRE(allocator.num_allocations() == 1);
 
-    // Free last block - should coalesce all
     allocator.deallocate(ptr3);
     REQUIRE(allocator.num_allocations() == 0);
 }
@@ -141,6 +137,14 @@ TEST_CASE("FreeListAllocator alignment", "[freelist]")
         REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % 32 == 0);
         allocator.deallocate(ptr);
     }
+
+    SECTION("64-byte alignment")
+    {
+        void* ptr = allocator.allocate(256, 64);
+        REQUIRE(ptr != nullptr);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % 64 == 0);
+        allocator.deallocate(ptr);
+    }
 }
 
 TEST_CASE("FreeListAllocator exhaustion", "[freelist]")
@@ -153,7 +157,6 @@ TEST_CASE("FreeListAllocator exhaustion", "[freelist]")
     REQUIRE(ptr1 != nullptr);
     REQUIRE(ptr2 != nullptr);
 
-    // Should fail - not enough space
     void* ptr3 = allocator.allocate(200);
     REQUIRE(ptr3 == nullptr);
 
@@ -168,7 +171,6 @@ TEST_CASE("FreeListAllocator move semantics", "[freelist]")
     REQUIRE(ptr != nullptr);
     REQUIRE(allocator1.num_allocations() == 1);
 
-    // Move constructor
     FreeListAllocator allocator2(std::move(allocator1));
     REQUIRE(allocator2.num_allocations() == 1);
     REQUIRE(allocator2.capacity() == 4096);
@@ -183,7 +185,6 @@ TEST_CASE("FreeListAllocator fragmentation handling", "[freelist]")
 
     std::vector<void*> ptrs;
 
-    // Allocate many small blocks
     for (int i = 0; i < 20; ++i)
     {
         void* ptr = allocator.allocate(100);
@@ -191,21 +192,37 @@ TEST_CASE("FreeListAllocator fragmentation handling", "[freelist]")
         ptrs.push_back(ptr);
     }
 
-    // Free every other block to create fragmentation
     for (std::size_t i = 1; i < ptrs.size(); i += 2)
     {
         allocator.deallocate(ptrs[i]);
         ptrs[i] = nullptr;
     }
 
-    // Should still be able to allocate in gaps
     void* ptr = allocator.allocate(50);
     REQUIRE(ptr != nullptr);
     allocator.deallocate(ptr);
 
-    // Clean up
     for (void* p : ptrs)
     {
         if (p) allocator.deallocate(p);
     }
+}
+
+TEST_CASE("FreeListAllocator properties", "[freelist]")
+{
+    constexpr std::size_t capacity = 8192;
+    const FreeListAllocator allocator(capacity, FreeListStrategy::BestFit);
+
+    REQUIRE(allocator.capacity() == capacity);
+    REQUIRE(allocator.used() == 0);
+    REQUIRE(allocator.available() == capacity);
+    REQUIRE(allocator.num_allocations() == 0);
+}
+
+TEST_CASE("FreeListAllocator nullptr handling", "[freelist]")
+{
+    FreeListAllocator allocator(4096, FreeListStrategy::FirstFit);
+
+    allocator.deallocate(nullptr);
+    REQUIRE(allocator.num_allocations() == 0);
 }
