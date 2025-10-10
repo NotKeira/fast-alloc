@@ -44,23 +44,23 @@ TEST_CASE("PoolAllocator capacity", "[pool]")
     SECTION("Fill pool completely")
     {
         void* ptrs[5];
-        for (int i = 0; i < 5; ++i)
+        for (auto& ptr : ptrs)
         {
-            ptrs[i] = pool.allocate();
-            REQUIRE(ptrs[i] != nullptr);
+            ptr = pool.allocate();
+            REQUIRE(ptr != nullptr);
         }
 
         REQUIRE(pool.is_full());
         REQUIRE(pool.allocated() == 5);
 
         // Next allocation should fail
-        void* ptr = pool.allocate();
-        REQUIRE(ptr == nullptr);
+        void* overflow_ptr = pool.allocate();
+        REQUIRE(overflow_ptr == nullptr);
 
         // Clean up
-        for (int i = 0; i < 5; ++i)
+        for (auto& ptr : ptrs)
         {
-            pool.deallocate(ptrs[i]);
+            pool.deallocate(ptr);
         }
     }
 }
@@ -111,4 +111,45 @@ TEST_CASE("PoolAllocator properties", "[pool]")
     REQUIRE(pool.capacity() == block_count);
     REQUIRE(pool.allocated() == 0);
     REQUIRE_FALSE(pool.is_full());
+}
+
+
+TEST_CASE("PoolAllocator nullptr handling", "[pool]")
+{
+    PoolAllocator pool(64, 5);
+
+    // Should not crash or affect state
+    pool.deallocate(nullptr);
+    REQUIRE(pool.allocated() == 0);
+}
+
+TEST_CASE("PoolAllocator alignment", "[pool]")
+{
+    PoolAllocator pool(64, 5);
+
+    void* ptr = pool.allocate();
+    REQUIRE(ptr != nullptr);
+
+    // Check alignment
+    const auto address = reinterpret_cast<std::uintptr_t>(ptr);
+    REQUIRE(address % alignof(std::max_align_t) == 0);
+
+    pool.deallocate(ptr);
+}
+
+TEST_CASE("PoolAllocator interleaved operations", "[pool]")
+{
+    PoolAllocator pool(64, 5);
+
+    void* p1 = pool.allocate();
+    void* p2 = pool.allocate();
+    pool.deallocate(p1);
+    void* p3 = pool.allocate();
+    pool.deallocate(p2);
+    void* p4 = pool.allocate();
+
+    REQUIRE(pool.allocated() == 2);
+
+    pool.deallocate(p3);
+    pool.deallocate(p4);
 }
