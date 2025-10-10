@@ -2,16 +2,11 @@
 
 #include <cassert>
 #include <cstring>
-
-#ifdef _WIN32
-#include <malloc.h>
-#else
 #include <cstdlib>
-#endif
 
 namespace fast_alloc
 {
-    PoolAllocator::PoolAllocator(std::size_t block_size, std::size_t block_count)
+    PoolAllocator::PoolAllocator(const std::size_t block_size, const std::size_t block_count)
         : block_size_(block_size)
           , block_count_(block_count)
           , allocated_count_(0)
@@ -120,7 +115,7 @@ namespace fast_alloc
         assert(allocated_count_ > 0 && "Deallocating from empty pool");
 
         // Push back to free list
-        void** block = static_cast<void**>(ptr);
+        const auto block = static_cast<void**>(ptr);
         *block = free_list_;
         free_list_ = ptr;
         --allocated_count_;
