@@ -104,7 +104,14 @@ namespace fast_alloc
         // Search for suitable block
         while (current_block)
         {
-            constexpr std::size_t adjustment = 0;
+            // Calculate adjustment needed for this block to meet alignment requirements
+            std::size_t adjustment = 0;
+            align_forward_with_header(
+                reinterpret_cast<std::size_t>(current_block),
+                alignment,
+                sizeof(AllocationHeader),
+                adjustment
+            );
 
             if (const std::size_t total_size = size + adjustment; current_block->size >= total_size)
             {
@@ -249,13 +256,18 @@ namespace fast_alloc
 
     void FreeListAllocator::coalescence(FreeBlock* previous, FreeBlock* current)
     {
+        // Coalescence merges adjacent free blocks to reduce fragmentation.
+        // Free blocks are kept sorted by address to enable efficient merging.
+        
         // Merge with next block if adjacent
         if (current->next)
         {
             const std::size_t current_end = reinterpret_cast<std::size_t>(current) + current->size;
 
+            // Check if current block ends exactly where next block begins
             if (const auto next_start = reinterpret_cast<std::size_t>(current->next); current_end == next_start)
             {
+                // Merge: expand current block to include next block
                 current->size += current->next->size;
                 current->next = current->next->next;
             }
@@ -266,8 +278,10 @@ namespace fast_alloc
         {
             const std::size_t prev_end = reinterpret_cast<std::size_t>(previous) + previous->size;
 
+            // Check if previous block ends exactly where current block begins
             if (const auto current_start = reinterpret_cast<std::size_t>(current); prev_end == current_start)
             {
+                // Merge: expand previous block to include current block
                 previous->size += current->size;
                 previous->next = current->next;
             }
