@@ -18,7 +18,7 @@ static void BM_ThreadSafePoolAllocator_SingleThread(benchmark::State& state)
         pool.deallocate(ptr);
     }
 
-    state.SetItemsProcessed(state.iterations());
+    state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
 }
 
 BENCHMARK(BM_ThreadSafePoolAllocator_SingleThread);
@@ -29,14 +29,14 @@ static void BM_ThreadSafePoolAllocator_MultiThread(benchmark::State& state)
     constexpr std::size_t block_count = 10000;
     ThreadSafePoolAllocator pool(block_size, block_count);
 
-    const int num_threads = state.range(0);
+    const auto num_threads = static_cast<std::size_t>(state.range(0));
 
     for (auto _ : state)
     {
         std::vector<std::thread> threads;
         threads.reserve(num_threads);
 
-        for (int i = 0; i < num_threads; ++i)
+        for (std::size_t i = 0; i < num_threads; ++i)
         {
             threads.emplace_back([&pool]()
             {
@@ -52,10 +52,14 @@ static void BM_ThreadSafePoolAllocator_MultiThread(benchmark::State& state)
         }
     }
 
-    state.SetItemsProcessed(state.iterations() * num_threads);
+    state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * num_threads));
 }
 
-BENCHMARK(BM_ThreadSafePoolAllocator_MultiThread)->Arg(2)->Arg(4)->Arg(8)->UseRealTime();
+BENCHMARK(BM_ThreadSafePoolAllocator_MultiThread)
+    ->Arg(2)
+    ->Arg(4)
+    ->Arg(8)
+    ->UseRealTime();
 
 static void BM_ThreadSafePoolAllocator_Contention(benchmark::State& state)
 {
@@ -63,21 +67,22 @@ static void BM_ThreadSafePoolAllocator_Contention(benchmark::State& state)
     constexpr std::size_t block_count = 1000;
     ThreadSafePoolAllocator pool(block_size, block_count);
 
-    const int num_threads = state.range(0);
+    const auto num_threads = static_cast<std::size_t>(state.range(0));
 
     for (auto _ : state)
     {
         std::vector<std::thread> threads;
         threads.reserve(num_threads);
 
-        for (int i = 0; i < num_threads; ++i)
+        for (std::size_t i = 0; i < num_threads; ++i)
         {
             threads.emplace_back([&pool]()
             {
                 constexpr int operations = 100;
                 for (int j = 0; j < operations; ++j)
                 {
-                    if (void* ptr = pool.allocate()) pool.deallocate(ptr);
+                    void* ptr = pool.allocate();
+                    if (ptr) pool.deallocate(ptr);
                 }
             });
         }
@@ -88,21 +93,25 @@ static void BM_ThreadSafePoolAllocator_Contention(benchmark::State& state)
         }
     }
 
-    state.SetItemsProcessed(state.iterations() * num_threads * 100);
+    state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * num_threads * 100));
 }
 
-BENCHMARK(BM_ThreadSafePoolAllocator_Contention)->Arg(2)->Arg(4)->Arg(8)->UseRealTime();
+BENCHMARK(BM_ThreadSafePoolAllocator_Contention)
+    ->Arg(2)
+    ->Arg(4)
+    ->Arg(8)
+    ->UseRealTime();
 
 static void BM_NewDelete_MultiThread(benchmark::State& state)
 {
-    const int num_threads = state.range(0);
+    const auto num_threads = static_cast<std::size_t>(state.range(0));
 
     for (auto _ : state)
     {
         std::vector<std::thread> threads;
         threads.reserve(num_threads);
 
-        for (int i = 0; i < num_threads; ++i)
+        for (std::size_t i = 0; i < num_threads; ++i)
         {
             threads.emplace_back([]()
             {
@@ -119,10 +128,14 @@ static void BM_NewDelete_MultiThread(benchmark::State& state)
         }
     }
 
-    state.SetItemsProcessed(state.iterations() * num_threads);
+    state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * num_threads));
 }
 
-BENCHMARK(BM_NewDelete_MultiThread)->Arg(2)->Arg(4)->Arg(8)->UseRealTime();
+BENCHMARK(BM_NewDelete_MultiThread)
+    ->Arg(2)
+    ->Arg(4)
+    ->Arg(8)
+    ->UseRealTime();
 
 static void BM_ThreadSafePoolAllocator_BulkOperations(benchmark::State& state)
 {
@@ -130,15 +143,15 @@ static void BM_ThreadSafePoolAllocator_BulkOperations(benchmark::State& state)
     constexpr std::size_t block_count = 10000;
     ThreadSafePoolAllocator pool(block_size, block_count);
 
-    const std::size_t operations_per_thread = state.range(0);
-    constexpr int num_threads = 4;
+    const auto operations_per_thread = static_cast<std::size_t>(state.range(0));
+    constexpr std::size_t num_threads = 4;
 
     for (auto _ : state)
     {
         std::vector<std::thread> threads;
         threads.reserve(num_threads);
 
-        for (int i = 0; i < num_threads; ++i)
+        for (std::size_t i = 0; i < num_threads; ++i)
         {
             threads.emplace_back([&pool, operations_per_thread]()
             {
@@ -164,7 +177,11 @@ static void BM_ThreadSafePoolAllocator_BulkOperations(benchmark::State& state)
         }
     }
 
-    state.SetItemsProcessed(state.iterations() * num_threads * operations_per_thread);
+    state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * num_threads * operations_per_thread));
 }
 
-BENCHMARK(BM_ThreadSafePoolAllocator_BulkOperations)->Arg(100)->Arg(500)->Arg(1000)->UseRealTime();
+BENCHMARK(BM_ThreadSafePoolAllocator_BulkOperations)
+    ->Arg(100)
+    ->Arg(500)
+    ->Arg(1000)
+    ->UseRealTime();

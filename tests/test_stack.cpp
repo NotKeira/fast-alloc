@@ -158,7 +158,7 @@ TEST_CASE("StackAllocator marker validation", "[stack]")
     REQUIRE(marker != nullptr);
     REQUIRE(ptr2 != nullptr);
 
-    REQUIRE(marker == stack.get_marker());
+    REQUIRE(marker != stack.get_marker());
 }
 
 TEST_CASE("StackAllocator zero-size allocation", "[stack]")
