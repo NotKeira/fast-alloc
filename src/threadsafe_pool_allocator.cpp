@@ -2,8 +2,12 @@
 
 #include <cassert>
 #include <cstring>
-#include <cstdlib>
 
+#ifdef _WIN32
+#include <malloc.h>
+#else
+#include <cstdlib>
+#endif
 
 namespace fast_alloc
 {
@@ -17,7 +21,6 @@ namespace fast_alloc
         assert(block_size >= sizeof(void*) && "Block size must be at least pointer size");
         assert(block_count > 0 && "Block count must be greater than zero");
 
-        // Allocate the memory pool
 #ifdef _WIN32
         memory_ = _aligned_malloc(block_size_ * block_count_, alignof(std::max_align_t));
 #else
