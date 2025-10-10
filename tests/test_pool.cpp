@@ -53,11 +53,9 @@ TEST_CASE("PoolAllocator capacity", "[pool]")
         REQUIRE(pool.is_full());
         REQUIRE(pool.allocated() == 5);
 
-        // Next allocation should fail
         void* overflow_ptr = pool.allocate();
         REQUIRE(overflow_ptr == nullptr);
 
-        // Clean up
         for (auto& ptr : ptrs)
         {
             pool.deallocate(ptr);
@@ -75,7 +73,6 @@ TEST_CASE("PoolAllocator reuse", "[pool]")
     pool.deallocate(ptr1);
     REQUIRE(pool.allocated() == 1);
 
-    // Should reuse freed block
     void* ptr3 = pool.allocate();
     REQUIRE(ptr3 != nullptr);
     REQUIRE(pool.allocated() == 2);
@@ -91,7 +88,6 @@ TEST_CASE("PoolAllocator move semantics", "[pool]")
     REQUIRE(ptr != nullptr);
     REQUIRE(pool1.allocated() == 1);
 
-    // Move constructor
     PoolAllocator pool2(std::move(pool1));
     REQUIRE(pool2.allocated() == 1);
     REQUIRE(pool2.capacity() == 10);
@@ -113,12 +109,10 @@ TEST_CASE("PoolAllocator properties", "[pool]")
     REQUIRE_FALSE(pool.is_full());
 }
 
-
 TEST_CASE("PoolAllocator nullptr handling", "[pool]")
 {
     PoolAllocator pool(64, 5);
 
-    // Should not crash or affect state
     pool.deallocate(nullptr);
     REQUIRE(pool.allocated() == 0);
 }
@@ -130,7 +124,6 @@ TEST_CASE("PoolAllocator alignment", "[pool]")
     void* ptr = pool.allocate();
     REQUIRE(ptr != nullptr);
 
-    // Check alignment
     const auto address = reinterpret_cast<std::uintptr_t>(ptr);
     REQUIRE(address % alignof(std::max_align_t) == 0);
 
