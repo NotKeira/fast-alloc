@@ -1,11 +1,6 @@
 #include "stack_allocator.h"
 #include <cassert>
-
-#ifdef _WIN32
-#include <malloc.h>
-#else
 #include <cstdlib>
-#endif
 
 namespace fast_alloc
 {
@@ -72,7 +67,7 @@ namespace fast_alloc
         return *this;
     }
 
-    void* StackAllocator::allocate(std::size_t size, std::size_t alignment)
+    void* StackAllocator::allocate(const std::size_t size, const std::size_t alignment)
     {
         assert(memory_ && "Allocator not initialised");
 
