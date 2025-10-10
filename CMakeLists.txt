@@ -87,6 +87,7 @@ if (BUILD_BENCHMARKS)
             benchmarks/bench_pool.cpp
             benchmarks/bench_stack.cpp
             benchmarks/bench_freelist.cpp
+            benchmarks/bench_threadsafe_pool.cpp
     )
 
     target_link_libraries(alloc_benchmarks PRIVATE

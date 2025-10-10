@@ -4,7 +4,6 @@
 
 using namespace fast_alloc;
 
-// Benchmark pool allocator vs new/delete
 static void BM_PoolAllocator_Allocate(benchmark::State& state)
 {
     constexpr std::size_t block_size = 64;
@@ -38,7 +37,6 @@ static void BM_NewDelete_Allocate(benchmark::State& state)
 
 BENCHMARK(BM_NewDelete_Allocate);
 
-// Benchmark bulk allocations
 static void BM_PoolAllocator_BulkAllocate(benchmark::State& state)
 {
     const std::size_t num_allocs = state.range(0);

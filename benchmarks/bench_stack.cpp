@@ -3,10 +3,9 @@
 
 using namespace fast_alloc;
 
-// Benchmark stack allocator vs malloc
 static void BM_StackAllocator_Allocate(benchmark::State& state)
 {
-    constexpr std::size_t stack_size = 1024 * 1024; // 1MB
+    constexpr std::size_t stack_size = 1024 * 1024;
     StackAllocator stack(stack_size);
 
     for (auto _ : state)
@@ -35,23 +34,20 @@ static void BM_Malloc_Allocate(benchmark::State& state)
 
 BENCHMARK(BM_Malloc_Allocate);
 
-// Benchmark frame-based allocation pattern
 static void BM_StackAllocator_FramePattern(benchmark::State& state)
 {
-    constexpr std::size_t stack_size = 1024 * 1024; // 1MB
+    constexpr std::size_t stack_size = 1024 * 1024;
     const std::size_t allocs_per_frame = state.range(0);
     StackAllocator stack(stack_size);
 
     for (auto _ : state)
     {
-        // Simulate frame allocations
         for (std::size_t i = 0; i < allocs_per_frame; ++i)
         {
             void* ptr = stack.allocate(64);
             benchmark::DoNotOptimize(ptr);
         }
 
-        // Reset at end of frame
         stack.reset();
     }
 
@@ -88,7 +84,6 @@ static void BM_Malloc_FramePattern(benchmark::State& state)
 
 BENCHMARK(BM_Malloc_FramePattern)->Arg(10)->Arg(100)->Arg(1000);
 
-// Benchmark aligned allocations
 static void BM_StackAllocator_AlignedAllocate(benchmark::State& state)
 {
     constexpr std::size_t stack_size = 1024 * 1024;
