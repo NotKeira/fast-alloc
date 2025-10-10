@@ -3,10 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
+#include <mutex>
 
 namespace fast_alloc
 {
-    // Thread-safe pool allocator using lock-free stack
     class ThreadSafePoolAllocator
     {
     public:
@@ -17,7 +17,7 @@ namespace fast_alloc
         ThreadSafePoolAllocator(const ThreadSafePoolAllocator&) = delete;
         ThreadSafePoolAllocator& operator=(const ThreadSafePoolAllocator&) = delete;
 
-        // Disable move (atomics can't be moved)
+        // Disable move
         ThreadSafePoolAllocator(ThreadSafePoolAllocator&&) = delete;
         ThreadSafePoolAllocator& operator=(ThreadSafePoolAllocator&&) = delete;
 
@@ -38,6 +38,7 @@ namespace fast_alloc
         }
 
     private:
+        mutable std::mutex mutex_;
         std::size_t block_size_;
         std::size_t block_count_;
         std::atomic<std::size_t> allocated_count_;

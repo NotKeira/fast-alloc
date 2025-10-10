@@ -1,16 +1,13 @@
 #include "threadsafe_pool_allocator.h"
+
 #include <cassert>
 #include <cstring>
-
-#ifdef _WIN32
-#include <malloc.h>
-#else
 #include <cstdlib>
-#endif
+
 
 namespace fast_alloc
 {
-    ThreadSafePoolAllocator::ThreadSafePoolAllocator(std::size_t block_size, std::size_t block_count)
+    ThreadSafePoolAllocator::ThreadSafePoolAllocator(const std::size_t block_size, const std::size_t block_count)
         : block_size_(block_size)
           , block_count_(block_count)
           , allocated_count_(0)
@@ -29,17 +26,17 @@ namespace fast_alloc
         assert(memory_ && "Failed to allocate memory pool");
 
         // Initialise free list - each block points to the next
-        std::byte* block = static_cast<std::byte*>(memory_);
+        auto* block = static_cast<std::byte*>(memory_);
 
         for (std::size_t i = 0; i < block_count_ - 1; ++i)
         {
-            void** current = reinterpret_cast<void**>(block);
+            const auto current = reinterpret_cast<void**>(block);
             block += block_size_;
             *current = block;
         }
 
         // Last block points to nullptr
-        void** last = reinterpret_cast<void**>(block);
+        const auto last = reinterpret_cast<void**>(block);
         *last = nullptr;
 
         // Set initial free list head
@@ -60,57 +57,26 @@ namespace fast_alloc
 
     void* ThreadSafePoolAllocator::allocate()
     {
-        void* old_head = free_list_.load(std::memory_order_acquire);
+        std::lock_guard<std::mutex> lock(mutex_);
 
-        while (old_head != nullptr)
-        {
-            // Read next pointer from the block
-            void* next = *static_cast<void**>(old_head);
+        void* ptr = free_list_.load(std::memory_order_relaxed);
+        if (!ptr) return nullptr;
 
-            // Try to update head to next
-            // Note: This has ABA problem potential, but acceptable for pool allocator
-            // since blocks are never freed back to OS during allocator lifetime
-            if (free_list_.compare_exchange_weak(
-                old_head,
-                next,
-                std::memory_order_release,
-                std::memory_order_acquire))
-            {
-                // Successfully allocated
-                allocated_count_.fetch_add(1, std::memory_order_relaxed);
-                return old_head;
-            }
+        void* next = *static_cast<void**>(ptr);
+        free_list_.store(next, std::memory_order_relaxed);
+        allocated_count_.fetch_add(1, std::memory_order_relaxed);
 
-            // CAS failed, old_head now contains the new value, retry
-        }
-
-        // Pool exhausted
-        return nullptr;
+        return ptr;
     }
 
     void ThreadSafePoolAllocator::deallocate(void* ptr)
     {
-        if (!ptr)
-        {
-            return;
-        }
+        if (!ptr) return;
 
-        void* old_head = free_list_.load(std::memory_order_acquire);
+        std::lock_guard<std::mutex> lock(mutex_);
 
-        do
-        {
-            // Make this block point to current head
-            *static_cast<void**>(ptr) = old_head;
-
-            // Try to make this block the new head
-        }
-        while (!free_list_.compare_exchange_weak(
-            old_head,
-            ptr,
-            std::memory_order_release,
-            std::memory_order_acquire));
-
-        // Successfully deallocated
+        *static_cast<void**>(ptr) = free_list_.load(std::memory_order_relaxed);
+        free_list_.store(ptr, std::memory_order_relaxed);
         allocated_count_.fetch_sub(1, std::memory_order_relaxed);
     }
 } // namespace fast_alloc
