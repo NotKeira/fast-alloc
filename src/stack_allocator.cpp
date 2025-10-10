@@ -1,6 +1,12 @@
 #include "stack_allocator.h"
+
 #include <cassert>
+
+#ifdef _WIN32
+#include <malloc.h>
+#else
 #include <cstdlib>
+#endif
 
 namespace fast_alloc
 {
