@@ -1,5 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include "freelist_allocator.h"
+#include <algorithm>
+#include <array>
 #include <vector>
 
 using namespace fast_alloc;
@@ -145,6 +148,75 @@ TEST_CASE("FreeListAllocator alignment", "[freelist]")
         REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % 64 == 0);
         allocator.deallocate(ptr);
     }
+}
+
+TEST_CASE("FreeListAllocator alignment after odd-sized allocations", "[freelist][alignment]")
+{
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    const auto alignment = GENERATE(1u, 2u, 4u, 8u, 16u, 32u, 64u);
+    FreeListAllocator allocator(4096, strategy);
+
+    constexpr std::array<std::size_t, 11> sizes = {1, 3, 7, 9, 15, 17, 31, 33, 63, 65, 100};
+    std::array<std::byte*, sizes.size()> ptrs{};
+
+    for (std::size_t i = 0; i < sizes.size(); ++i)
+    {
+        ptrs[i] = static_cast<std::byte*>(allocator.allocate(sizes[i], alignment));
+        REQUIRE(ptrs[i] != nullptr);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(ptrs[i]) % alignment == 0);
+        std::fill_n(ptrs[i], sizes[i], static_cast<std::byte>(i + 1));
+    }
+
+    for (std::size_t i = 0; i < sizes.size(); i += 2)
+    {
+        allocator.deallocate(ptrs[i]);
+    }
+
+    for (std::size_t i = 1; i < sizes.size(); i += 2)
+    {
+        const auto value = static_cast<std::byte>(i + 1);
+        REQUIRE(std::all_of(ptrs[i], ptrs[i] + sizes[i], [value](const std::byte byte)
+        {
+            return byte == value;
+        }));
+        allocator.deallocate(ptrs[i]);
+    }
+
+    REQUIRE(allocator.used() == 0);
+    REQUIRE(allocator.available() == allocator.capacity());
+    REQUIRE(allocator.num_allocations() == 0);
+
+    void* ptr = allocator.allocate(4000);
+    REQUIRE(ptr != nullptr);
+    allocator.deallocate(ptr);
+}
+
+TEST_CASE("FreeListAllocator alignment with small remainders", "[freelist][alignment]")
+{
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    const auto size = GENERATE(81u, 82u, 83u, 84u, 85u, 86u, 87u, 88u,
+                              89u, 90u, 91u, 92u, 93u, 94u, 95u, 96u, 97u);
+    FreeListAllocator allocator(128, strategy);
+
+    auto* first = static_cast<std::byte*>(allocator.allocate(size, 1));
+    REQUIRE(first != nullptr);
+    std::fill_n(first, size, std::byte{0x5a});
+
+    auto* second = static_cast<std::byte*>(allocator.allocate(1, 1));
+    if (second)
+    {
+        *second = std::byte{0xa5};
+        allocator.deallocate(second);
+    }
+
+    REQUIRE(std::all_of(first, first + size, [](const std::byte byte)
+    {
+        return byte == std::byte{0x5a};
+    }));
+
+    allocator.deallocate(first);
+    REQUIRE(allocator.used() == 0);
+    REQUIRE(allocator.num_allocations() == 0);
 }
 
 TEST_CASE("FreeListAllocator exhaustion", "[freelist]")

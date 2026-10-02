@@ -152,11 +152,14 @@ namespace fast_alloc
             adjustment
         );
 
-        const std::size_t total_size = size + adjustment;
+        std::size_t total_size = size + adjustment;
+        const std::size_t block_alignment = alignof(FreeBlock);
+        const std::size_t padding = (block_alignment - total_size % block_alignment) % block_alignment;
 
-        // If remaining space is large enough, split the block
-        if (best_block->size - total_size > sizeof(FreeBlock))
+        // Align the split boundary and leave enough space for a free block.
+        if (best_block->size - total_size > sizeof(FreeBlock) + padding)
         {
+            total_size += padding;
             auto* new_block = reinterpret_cast<FreeBlock*>(
                 reinterpret_cast<std::size_t>(best_block) + total_size
             );

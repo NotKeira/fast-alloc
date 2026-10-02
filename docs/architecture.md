@@ -256,8 +256,18 @@ Memory layout:
 
 **Block Splitting:**
 
+The split boundary is padded to `alignof(FreeBlock)` so the remaining free
+block and subsequent allocation headers stay naturally aligned, even when
+the caller requests byte alignment. Trailing padding is included in the
+allocation header's size and in `used()`, so it is recovered on deallocation.
+The block is split only if the remainder can hold a free block after padding.
+
 ```cpp
-if (block->size - required_size > sizeof(FreeBlock)) {
+const size_t block_alignment = alignof(FreeBlock);
+const size_t padding = (block_alignment - required_size % block_alignment) % block_alignment;
+
+if (block->size - required_size > sizeof(FreeBlock) + padding) {
+    required_size += padding;
     // Split: create new free block from remainder
     FreeBlock* new_block = (FreeBlock*)(block_addr + required_size);
     new_block->size = block->size - required_size;
