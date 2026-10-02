@@ -79,7 +79,7 @@ namespace fast_alloc
         /** @brief Get total capacity in bytes. */
         [[nodiscard]] std::size_t capacity() const noexcept { return size_; }
 
-        /** @brief Get currently used bytes (including headers and alignment padding). */
+        /** @brief Get currently used bytes, including headers, padding and unsplit remainders. */
         [[nodiscard]] std::size_t used() const noexcept { return used_memory_; }
 
         /** @brief Get available bytes remaining. */
@@ -95,7 +95,7 @@ namespace fast_alloc
          */
         struct AllocationHeader
         {
-            std::size_t size;       ///< Total size including header, adjustment and trailing padding
+            std::size_t size;       ///< Total reserved block size, including padding and unsplit remainders
             std::size_t adjustment; ///< Bytes added for alignment
         };
 

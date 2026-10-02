@@ -262,6 +262,11 @@ the caller requests byte alignment. Trailing padding is included in the
 allocation header's size and in `used()`, so it is recovered on deallocation.
 The block is split only if the remainder can hold a free block after padding.
 
+If the remainder is too small to split, the allocation consumes the entire
+free block. The allocation header records the full block size, and `used()`
+includes the unsplit remainder. Deallocation restores the whole block so
+adjacent free blocks can coalesce without leaving a gap.
+
 ```cpp
 const size_t block_alignment = alignof(FreeBlock);
 const size_t padding = (block_alignment - required_size % block_alignment) % block_alignment;

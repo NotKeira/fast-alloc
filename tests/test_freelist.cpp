@@ -236,6 +236,74 @@ TEST_CASE("FreeListAllocator exhaustion", "[freelist]")
     allocator.deallocate(ptr2);
 }
 
+TEST_CASE("FreeListAllocator whole-block allocation accounting", "[freelist][capacity]")
+{
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    const auto remainder = GENERATE(std::size_t{0}, std::size_t{1},
+                                    sizeof(std::size_t), 2 * sizeof(std::size_t));
+    FreeListAllocator allocator(128, strategy);
+
+    void* probe = allocator.allocate(16, 1);
+    REQUIRE(probe != nullptr);
+    const std::size_t overhead = allocator.used() - 16;
+    allocator.deallocate(probe);
+
+    void* ptr = allocator.allocate(allocator.capacity() - overhead - remainder, 1);
+    REQUIRE(ptr != nullptr);
+    REQUIRE(allocator.used() == allocator.capacity());
+    REQUIRE(allocator.available() == 0);
+    REQUIRE(allocator.num_allocations() == 1);
+    REQUIRE(allocator.allocate(1, 1) == nullptr);
+
+    allocator.deallocate(ptr);
+    REQUIRE(allocator.used() == 0);
+    REQUIRE(allocator.available() == allocator.capacity());
+    REQUIRE(allocator.num_allocations() == 0);
+
+    for (int i = 0; i < 3; ++i)
+    {
+        ptr = allocator.allocate(allocator.capacity() - overhead, 1);
+        REQUIRE(ptr != nullptr);
+        REQUIRE(allocator.used() == allocator.capacity());
+        allocator.deallocate(ptr);
+        REQUIRE(allocator.used() == 0);
+    }
+}
+
+TEST_CASE("FreeListAllocator coalescence after whole-block allocation", "[freelist][capacity]")
+{
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    FreeListAllocator allocator(512, strategy);
+
+    void* left = allocator.allocate(32, 1);
+    REQUIRE(left != nullptr);
+    const std::size_t overhead = allocator.used() - 32;
+
+    void* separator = allocator.allocate(32, 1);
+    void* middle = allocator.allocate(96, 1);
+    void* right = allocator.allocate(32, 1);
+    REQUIRE(separator != nullptr);
+    REQUIRE(middle != nullptr);
+    REQUIRE(right != nullptr);
+
+    allocator.deallocate(left);
+    allocator.deallocate(middle);
+
+    void* replacement = allocator.allocate(95, 1);
+    REQUIRE(replacement == middle);
+
+    allocator.deallocate(replacement);
+    allocator.deallocate(separator);
+    allocator.deallocate(right);
+    REQUIRE(allocator.used() == 0);
+    REQUIRE(allocator.available() == allocator.capacity());
+    REQUIRE(allocator.num_allocations() == 0);
+
+    void* ptr = allocator.allocate(allocator.capacity() - overhead, 1);
+    REQUIRE(ptr != nullptr);
+    allocator.deallocate(ptr);
+}
+
 TEST_CASE("FreeListAllocator move semantics", "[freelist]")
 {
     FreeListAllocator allocator1(4096, FreeListStrategy::FirstFit);

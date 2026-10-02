@@ -177,7 +177,8 @@ namespace fast_alloc
         }
         else
         {
-            // Use entire block
+            // Use the entire block, including the unsplittable remainder.
+            total_size = best_block->size;
             if (best_prev)
             {
                 best_prev->next = best_block->next;
