@@ -33,7 +33,7 @@ jobs:
           .\Release\alloc_benchmarks.exe --benchmark_min_time=0.1
 
   build-linux:
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         build_type: [ Debug, Release ]
@@ -86,7 +86,7 @@ jobs:
         working-directory: build
         run: ./alloc_benchmarks --benchmark_min_time=0.1
   sanitisers:
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         sanitiser: [ address, thread, undefined ]
