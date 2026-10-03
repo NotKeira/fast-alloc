@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "pool_allocator.h"
+#include <limits>
+#include <new>
 
 using namespace fast_alloc;
 
@@ -60,6 +62,21 @@ TEST_CASE("PoolAllocator capacity", "[pool]")
         {
             pool.deallocate(ptr);
         }
+    }
+}
+
+TEST_CASE("PoolAllocator backing size overflow", "[pool][overflow]")
+{
+    constexpr std::size_t maximum = std::numeric_limits<std::size_t>::max();
+
+    SECTION("Block count overflow")
+    {
+        REQUIRE_THROWS_AS(PoolAllocator(64, maximum / 64 + 1), std::bad_alloc);
+    }
+
+    SECTION("Block size overflow")
+    {
+        REQUIRE_THROWS_AS(PoolAllocator(maximum / 2 + 1, 2), std::bad_alloc);
     }
 }
 

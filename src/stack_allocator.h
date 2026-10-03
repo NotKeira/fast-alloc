@@ -47,6 +47,7 @@ namespace fast_alloc
          * @param alignment Memory alignment requirement (default: alignof(std::max_align_t))
          * @return Pointer to allocated memory, or nullptr if insufficient space
          * @note Complexity: O(1) - pointer arithmetic only
+         * @note Failed allocations leave the allocator unchanged.
          * 
          * Example:
          * @code
@@ -97,7 +98,7 @@ namespace fast_alloc
          * @brief Align address forward to meet alignment requirement.
          * @param address Address to align
          * @param alignment Alignment requirement (must be power of 2)
-         * @return Aligned address
+         * @return Aligned address, or zero if the address calculation overflows
          */
         [[nodiscard]] static std::size_t align_forward(std::size_t address, std::size_t alignment) noexcept;
     };

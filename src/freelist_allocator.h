@@ -59,6 +59,7 @@ namespace fast_alloc
          * @param alignment Memory alignment requirement (default: alignof(std::max_align_t))
          * @return Pointer to allocated memory, or nullptr if no suitable block found
          * @note Complexity: O(n) where n is number of free blocks
+         * @note Failed allocations leave the allocator unchanged.
          * 
          * The allocator will search the free list using the configured strategy:
          * - FirstFit: Returns first block large enough (faster)
@@ -131,7 +132,7 @@ namespace fast_alloc
          * @param alignment Desired alignment
          * @param header_size Size of allocation header
          * @param[out] adjustment Total adjustment needed (header + padding)
-         * @return Aligned address after header
+         * @return Aligned address after header, or zero if the address calculation overflows
          */
         static std::size_t align_forward_with_header(
             std::size_t address,

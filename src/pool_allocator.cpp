@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <cstring>
+#include <limits>
+#include <new>
 
 #ifdef _WIN32
 #include <malloc.h>
@@ -21,10 +23,16 @@ namespace fast_alloc
         assert(block_size >= sizeof(void*) && "Block size must be at least pointer size");
         assert(block_count > 0 && "Block count must be greater than zero");
 
+        if (block_count_ != 0 && block_size_ > std::numeric_limits<std::size_t>::max() / block_count_)
+        {
+            throw std::bad_alloc();
+        }
+        const std::size_t pool_size = block_size_ * block_count_;
+
 #ifdef _WIN32
-        memory_ = _aligned_malloc(block_size_ * block_count_, alignof(std::max_align_t));
+        memory_ = _aligned_malloc(pool_size, alignof(std::max_align_t));
 #else
-        memory_ = std::aligned_alloc(alignof(std::max_align_t), block_size_ * block_count_);
+        memory_ = std::aligned_alloc(alignof(std::max_align_t), pool_size);
 #endif
         assert(memory_ && "Failed to allocate memory pool");
 

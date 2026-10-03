@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include "stack_allocator.h"
+#include <limits>
 
 using namespace fast_alloc;
 
@@ -102,6 +104,46 @@ TEST_CASE("StackAllocator exhaustion", "[stack]")
 
     void* ptr3 = stack.allocate(100);
     REQUIRE(ptr3 == nullptr);
+}
+
+TEST_CASE("StackAllocator allocation size overflow", "[stack][overflow]")
+{
+    constexpr std::size_t maximum = std::numeric_limits<std::size_t>::max();
+    const auto size = GENERATE_COPY(maximum, maximum - 1, maximum - 7);
+    const auto alignment = GENERATE(1u, 16u, 64u);
+    StackAllocator stack(1024);
+
+    auto* first = static_cast<std::byte*>(stack.allocate(1, 1));
+    REQUIRE(first != nullptr);
+    *first = std::byte{0x5a};
+    void* marker = stack.get_marker();
+    const std::size_t used = stack.used();
+    const std::size_t available = stack.available();
+
+    REQUIRE(stack.allocate(size, alignment) == nullptr);
+    REQUIRE(stack.get_marker() == marker);
+    REQUIRE(stack.used() == used);
+    REQUIRE(stack.available() == available);
+    REQUIRE(*first == std::byte{0x5a});
+
+    REQUIRE(stack.allocate(available, 1) == marker);
+    REQUIRE(stack.used() == stack.capacity());
+}
+
+TEST_CASE("StackAllocator excessive alignment", "[stack][overflow]")
+{
+    constexpr std::size_t alignment = std::size_t{1} << (std::numeric_limits<std::size_t>::digits - 1);
+    StackAllocator stack(1024);
+    REQUIRE(stack.allocate(1, 1) != nullptr);
+    void* marker = stack.get_marker();
+    const std::size_t used = stack.used();
+    const std::size_t available = stack.available();
+
+    REQUIRE(stack.allocate(1, alignment) == nullptr);
+    REQUIRE(stack.get_marker() == marker);
+    REQUIRE(stack.used() == used);
+    REQUIRE(stack.available() == available);
+    REQUIRE(stack.allocate(available, 1) == marker);
 }
 
 TEST_CASE("StackAllocator move semantics", "[stack]")

@@ -1,6 +1,7 @@
 #include "stack_allocator.h"
 
 #include <cassert>
+#include <limits>
 
 #ifdef _WIN32
 #include <malloc.h>
@@ -77,13 +78,23 @@ namespace fast_alloc
     {
         assert(memory_ && "Allocator not initialised");
 
+        const std::size_t remaining = available();
+        if (size > remaining)
+        {
+            return nullptr;
+        }
+
         // Calculate aligned address
         const auto current_address = reinterpret_cast<std::size_t>(current_);
         const std::size_t aligned_address = align_forward(current_address, alignment);
+        if (aligned_address == 0)
+        {
+            return nullptr;
+        }
         const std::size_t adjustment = aligned_address - current_address;
 
-        // Check if we have enough space
-        if (const std::size_t total_size = size + adjustment; used() + total_size > size_)
+        // Subtract the payload before checking padding to avoid size overflow.
+        if (adjustment > remaining - size)
         {
             return nullptr; // Out of memory
         }
@@ -145,7 +156,12 @@ namespace fast_alloc
 
         if (const std::size_t modulo = address & (alignment - 1); modulo != 0)
         {
-            address += alignment - modulo;
+            const std::size_t padding = alignment - modulo;
+            if (padding > std::numeric_limits<std::size_t>::max() - address)
+            {
+                return 0;
+            }
+            address += padding;
         }
 
         return address;

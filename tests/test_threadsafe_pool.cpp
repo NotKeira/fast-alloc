@@ -3,6 +3,8 @@
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <limits>
+#include <new>
 
 using namespace fast_alloc;
 
@@ -63,6 +65,21 @@ TEST_CASE("ThreadSafePoolAllocator capacity", "[threadsafe_pool]")
         {
             pool.deallocate(ptr);
         }
+    }
+}
+
+TEST_CASE("ThreadSafePoolAllocator backing size overflow", "[threadsafe_pool][overflow]")
+{
+    constexpr std::size_t maximum = std::numeric_limits<std::size_t>::max();
+
+    SECTION("Block count overflow")
+    {
+        REQUIRE_THROWS_AS(ThreadSafePoolAllocator(64, maximum / 64 + 1), std::bad_alloc);
+    }
+
+    SECTION("Block size overflow")
+    {
+        REQUIRE_THROWS_AS(ThreadSafePoolAllocator(maximum / 2 + 1, 2), std::bad_alloc);
     }
 }
 

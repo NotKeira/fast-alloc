@@ -1,6 +1,7 @@
 #include "freelist_allocator.h"
 
 #include <cassert>
+#include <limits>
 
 #ifdef _WIN32
 #include <malloc.h>
@@ -94,6 +95,11 @@ namespace fast_alloc
         assert(size > 0 && "Allocation size must be greater than zero");
         assert(memory_ && "Allocator not initialised");
 
+        if (size > size_)
+        {
+            return nullptr;
+        }
+
         FreeBlock* prev_block = nullptr;
         FreeBlock* current_block = free_blocks_;
         FreeBlock* best_block = nullptr;
@@ -106,14 +112,15 @@ namespace fast_alloc
         {
             // Calculate adjustment needed for this block to meet alignment requirements
             std::size_t adjustment = 0;
-            align_forward_with_header(
+            const std::size_t aligned_address = align_forward_with_header(
                 reinterpret_cast<std::size_t>(current_block),
                 alignment,
                 sizeof(AllocationHeader),
                 adjustment
             );
 
-            if (const std::size_t total_size = size + adjustment; current_block->size >= total_size)
+            if (aligned_address != 0 && adjustment <= current_block->size
+                && size <= current_block->size - adjustment)
             {
                 if (strategy_ == FreeListStrategy::FirstFit)
                 {
@@ -301,11 +308,22 @@ namespace fast_alloc
     {
         assert((alignment & (alignment - 1)) == 0 && "Alignment must be power of 2");
 
+        adjustment = 0;
+        if (header_size > std::numeric_limits<std::size_t>::max() - address)
+        {
+            return 0;
+        }
+
         std::size_t aligned_address = address + header_size;
 
         if (const std::size_t modulo = aligned_address & (alignment - 1); modulo != 0)
         {
-            aligned_address += alignment - modulo;
+            const std::size_t padding = alignment - modulo;
+            if (padding > std::numeric_limits<std::size_t>::max() - aligned_address)
+            {
+                return 0;
+            }
+            aligned_address += padding;
         }
 
         adjustment = aligned_address - address;

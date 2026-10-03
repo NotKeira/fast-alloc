@@ -33,6 +33,7 @@ namespace fast_alloc
          * @param block_size Size in bytes of each block (must be >= sizeof(void*))
          * @param block_count Number of blocks to allocate
          * @throws assert if block_size < sizeof(void*) or block_count == 0
+         * @throws std::bad_alloc if the total pool size cannot be represented by std::size_t
          */
         ThreadSafePoolAllocator(std::size_t block_size, std::size_t block_count);
         ~ThreadSafePoolAllocator();

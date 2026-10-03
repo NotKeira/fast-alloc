@@ -3,6 +3,7 @@
 #include "freelist_allocator.h"
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <vector>
 
 using namespace fast_alloc;
@@ -302,6 +303,63 @@ TEST_CASE("FreeListAllocator coalescence after whole-block allocation", "[freeli
     void* ptr = allocator.allocate(allocator.capacity() - overhead, 1);
     REQUIRE(ptr != nullptr);
     allocator.deallocate(ptr);
+}
+
+TEST_CASE("FreeListAllocator allocation size overflow", "[freelist][overflow]")
+{
+    constexpr std::size_t maximum = std::numeric_limits<std::size_t>::max();
+    const auto size = GENERATE_COPY(maximum, maximum - 1, maximum - 15);
+    const auto alignment = GENERATE(1u, 8u, 16u, 64u);
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    FreeListAllocator allocator(1024, strategy);
+
+    auto* first = static_cast<std::byte*>(allocator.allocate(16));
+    REQUIRE(first != nullptr);
+    std::fill_n(first, 16, std::byte{0x5a});
+    const std::size_t used = allocator.used();
+    const std::size_t available = allocator.available();
+    const std::size_t allocations = allocator.num_allocations();
+
+    REQUIRE(allocator.allocate(size, alignment) == nullptr);
+    REQUIRE(allocator.used() == used);
+    REQUIRE(allocator.available() == available);
+    REQUIRE(allocator.num_allocations() == allocations);
+    REQUIRE(std::all_of(first, first + 16, [](const std::byte byte)
+    {
+        return byte == std::byte{0x5a};
+    }));
+
+    void* second = allocator.allocate(64);
+    REQUIRE(second != nullptr);
+    allocator.deallocate(second);
+    allocator.deallocate(first);
+    REQUIRE(allocator.used() == 0);
+
+    void* ptr = allocator.allocate(allocator.capacity() - used);
+    REQUIRE(ptr != nullptr);
+    allocator.deallocate(ptr);
+}
+
+TEST_CASE("FreeListAllocator excessive alignment", "[freelist][overflow]")
+{
+    constexpr std::size_t alignment = std::size_t{1} << (std::numeric_limits<std::size_t>::digits - 1);
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    FreeListAllocator allocator(1024, strategy);
+    void* first = allocator.allocate(16);
+    REQUIRE(first != nullptr);
+    const std::size_t used = allocator.used();
+    const std::size_t available = allocator.available();
+    const std::size_t allocations = allocator.num_allocations();
+
+    REQUIRE(allocator.allocate(1, alignment) == nullptr);
+    REQUIRE(allocator.used() == used);
+    REQUIRE(allocator.available() == available);
+    REQUIRE(allocator.num_allocations() == allocations);
+    void* second = allocator.allocate(64);
+    REQUIRE(second != nullptr);
+    allocator.deallocate(second);
+    allocator.deallocate(first);
+    REQUIRE(allocator.used() == 0);
 }
 
 TEST_CASE("FreeListAllocator move semantics", "[freelist]")

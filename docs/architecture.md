@@ -26,6 +26,12 @@ for specific patterns common in game development:
 
 Custom allocators exploit domain-specific knowledge to eliminate these costs.
 
+Allocation bounds are checked before adding payload sizes, headers and alignment
+padding. Stack and free-list requests that cannot fit return `nullptr` without
+changing allocator state. Both pool constructors check `block_size * block_count`
+before allocating backing memory and throw `std::bad_alloc` if the total size
+cannot be represented by `std::size_t`.
+
 ## Pool Allocator
 
 ### Use Case
