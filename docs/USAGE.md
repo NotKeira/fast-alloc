@@ -29,6 +29,40 @@ if (block) {
 }
 ```
 
+### Block Alignment
+
+Every block is aligned to `alignof(std::max_align_t)` by default. The pool adds
+trailing padding when the requested block size is not a multiple of the
+alignment, so odd-sized objects remain safe to allocate and return to the free
+list. Padding does not change the value returned by `block_size()` or the number
+of available blocks.
+
+Pass an optional third constructor argument for types with extended alignment:
+
+```cpp
+#include "pool_allocator.h"
+#include <cstddef>
+#include <new>
+
+struct alignas(64) Packet {
+    std::byte data[64];
+};
+
+fast_alloc::PoolAllocator pool(sizeof(Packet), 1000, alignof(Packet));
+if (void* memory = pool.allocate()) {
+    Packet* packet = new (memory) Packet{};
+    // Use packet...
+    packet->~Packet();
+    pool.deallocate(packet);
+}
+```
+
+The alignment must be a non-zero power of two; invalid values throw
+`std::invalid_argument`. Values below `alignof(void*)` are raised to that minimum
+so the intrusive free list remains aligned. The backing allocation contains
+`block_stride() * capacity()` bytes. For example, a 28-byte block with 16-byte
+alignment occupies a 32-byte stride.
+
 ### Particle System Example
 
 ```cpp
@@ -65,12 +99,18 @@ public:
 fast_alloc::PoolAllocator pool(64, 100);
 
 std::cout << "Block size: " << pool.block_size() << " bytes\n";
+std::cout << "Block stride: " << pool.block_stride() << " bytes\n";
+std::cout << "Alignment: " << pool.alignment() << " bytes\n";
 std::cout << "Capacity: " << pool.capacity() << " blocks\n";
 std::cout << "Allocated: " << pool.allocated() << " blocks\n";
 std::cout << "Full: " << (pool.is_full() ? "yes" : "no") << "\n";
 ```
 
 ## Thread-Safe Pool Allocator
+
+Block sizes, padding and the optional alignment argument follow the same rules
+as [PoolAllocator](#block-alignment). All blocks retain their alignment during
+concurrent allocation and deallocation.
 
 ### Multi-threaded Audio System
 
@@ -328,7 +368,7 @@ class ObjectPool {
     
 public:
     ObjectPool(size_t capacity) 
-        : pool_(sizeof(T), capacity) {}
+        : pool_(sizeof(T), capacity, alignof(T)) {}
     
     template<typename... Args>
     T* create(Args&&... args) {

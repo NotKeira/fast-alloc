@@ -1,7 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include "pool_allocator.h"
+#include <cstring>
 #include <limits>
 #include <new>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 using namespace fast_alloc;
 
@@ -78,6 +83,18 @@ TEST_CASE("PoolAllocator backing size overflow", "[pool][overflow]")
     {
         REQUIRE_THROWS_AS(PoolAllocator(maximum / 2 + 1, 2), std::bad_alloc);
     }
+
+    SECTION("Stride rounding overflow")
+    {
+        REQUIRE_THROWS_AS(PoolAllocator(maximum, 1, 64), std::bad_alloc);
+    }
+
+    SECTION("Padded size overflow when the requested size fits")
+    {
+        constexpr std::size_t block_size = 65;
+        constexpr std::size_t block_count = maximum / block_size;
+        REQUIRE_THROWS_AS(PoolAllocator(block_size, block_count, 64), std::bad_alloc);
+    }
 }
 
 TEST_CASE("PoolAllocator reuse", "[pool]")
@@ -145,6 +162,152 @@ TEST_CASE("PoolAllocator alignment", "[pool]")
     REQUIRE(address % alignof(std::max_align_t) == 0);
 
     pool.deallocate(ptr);
+}
+
+TEST_CASE("PoolAllocator aligns every odd-sized block", "[pool][alignment]")
+{
+    constexpr std::size_t block_size = sizeof(void*) + 1;
+    constexpr std::size_t block_count = alignof(std::max_align_t);
+    PoolAllocator pool(block_size, block_count);
+    std::vector<void*> blocks;
+
+    for (std::size_t i = 0; i < block_count; ++i)
+    {
+        void* ptr = pool.allocate();
+        REQUIRE(ptr != nullptr);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignof(std::max_align_t) == 0);
+        std::memset(ptr, static_cast<int>(i + 1), block_size);
+        blocks.push_back(ptr);
+    }
+    REQUIRE(pool.allocate() == nullptr);
+    REQUIRE(pool.block_size() == block_size);
+
+    for (std::size_t i = 0; i < blocks.size(); ++i)
+    {
+        const auto* bytes = static_cast<const unsigned char*>(blocks[i]);
+        for (std::size_t j = 0; j < block_size; ++j)
+        {
+            REQUIRE(bytes[j] == i + 1);
+        }
+    }
+
+    for (void* ptr : blocks)
+    {
+        pool.deallocate(ptr);
+    }
+    REQUIRE(pool.allocated() == 0);
+
+    for (std::size_t i = 0; i < block_count; ++i)
+    {
+        void* ptr = pool.allocate();
+        REQUIRE(ptr == blocks[block_count - i - 1]);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignof(std::max_align_t) == 0);
+    }
+}
+
+TEST_CASE("PoolAllocator configurable alignment", "[pool][alignment]")
+{
+    const auto block_size = GENERATE(sizeof(void*), sizeof(void*) + 1, 3 * alignof(std::max_align_t));
+    const auto alignment = GENERATE(std::size_t{1}, 2, 4, 8, 16, 32, 64, 128);
+    PoolAllocator pool(block_size, 3, alignment);
+
+    REQUIRE(pool.block_size() == block_size);
+    REQUIRE(pool.alignment() >= alignment);
+    REQUIRE(pool.alignment() >= alignof(void*));
+    REQUIRE(pool.block_stride() >= block_size);
+    REQUIRE(pool.block_stride() % pool.alignment() == 0);
+    REQUIRE(pool.block_stride() - block_size < pool.alignment());
+
+    void* blocks[3];
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        blocks[i] = pool.allocate();
+        REQUIRE(blocks[i] != nullptr);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(blocks[i]) % alignment == 0);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(blocks[i]) % alignof(void*) == 0);
+        if (i > 0)
+        {
+            const auto distance = static_cast<std::byte*>(blocks[i]) - static_cast<std::byte*>(blocks[i - 1]);
+            REQUIRE(static_cast<std::size_t>(distance) == pool.block_stride());
+        }
+    }
+    REQUIRE(pool.allocate() == nullptr);
+
+    for (void* ptr : blocks)
+    {
+        pool.deallocate(ptr);
+    }
+    REQUIRE(pool.allocated() == 0);
+}
+
+TEST_CASE("PoolAllocator supports objects with extended alignment", "[pool][alignment]")
+{
+    struct alignas(64) Object
+    {
+        std::size_t value;
+    };
+
+    PoolAllocator pool(sizeof(Object), 3, alignof(Object));
+    Object* objects[3];
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        void* ptr = pool.allocate();
+        REQUIRE(ptr != nullptr);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignof(Object) == 0);
+        objects[i] = new (ptr) Object{i};
+    }
+
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        REQUIRE(objects[i]->value == i);
+        objects[i]->~Object();
+        pool.deallocate(objects[i]);
+    }
+}
+
+TEST_CASE("PoolAllocator rejects invalid alignment", "[pool][alignment]")
+{
+    const auto alignment = GENERATE(std::size_t{0}, 3, 24);
+    REQUIRE_THROWS_AS(PoolAllocator(64, 3, alignment), std::invalid_argument);
+}
+
+TEST_CASE("PoolAllocator moves preserve padded block layout", "[pool][alignment]")
+{
+    PoolAllocator source(sizeof(void*) + 1, 3, 64);
+    void* first = source.allocate();
+    void* second = source.allocate();
+    REQUIRE(first != nullptr);
+    REQUIRE(second != nullptr);
+
+    SECTION("Move construction")
+    {
+        PoolAllocator destination(std::move(source));
+        REQUIRE(destination.block_size() == sizeof(void*) + 1);
+        REQUIRE(destination.block_stride() == 64);
+        REQUIRE(destination.alignment() == 64);
+        REQUIRE(destination.allocated() == 2);
+        destination.deallocate(second);
+        REQUIRE(destination.allocate() == second);
+        destination.deallocate(first);
+        destination.deallocate(second);
+        REQUIRE(destination.allocated() == 0);
+    }
+
+    SECTION("Move assignment")
+    {
+        PoolAllocator destination(128, 2);
+        destination = std::move(source);
+        REQUIRE(destination.block_size() == sizeof(void*) + 1);
+        REQUIRE(destination.block_stride() == 64);
+        REQUIRE(destination.alignment() == 64);
+        REQUIRE(destination.capacity() == 3);
+        REQUIRE(destination.allocated() == 2);
+        destination.deallocate(second);
+        REQUIRE(destination.allocate() == second);
+        destination.deallocate(first);
+        destination.deallocate(second);
+        REQUIRE(destination.allocated() == 0);
+    }
 }
 
 TEST_CASE("PoolAllocator interleaved operations", "[pool]")

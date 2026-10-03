@@ -12,7 +12,8 @@ namespace fast_alloc
      * Ideal for particle systems, game entities, audio voices, and network packets.
      * 
      * @note Thread-safety: Not thread-safe. Use ThreadSafePoolAllocator for concurrent access.
-     * @note Memory overhead: 0 bytes per allocation (uses free space for intrusive list).
+     * @note No separate per-allocation metadata (uses free space for the intrusive list).
+     * @note Blocks may include trailing padding to meet the requested alignment.
      * @note Fragmentation: None (all blocks same size).
      * 
      * @warning Block size must be at least sizeof(void*) to store free list pointers.
@@ -25,10 +26,14 @@ namespace fast_alloc
          * 
          * @param block_size Size in bytes of each block (must be >= sizeof(void*))
          * @param block_count Number of blocks to allocate
+         * @param alignment Required block alignment (non-zero power of two).
+         *        Defaults to alignof(std::max_align_t); raised to alignof(void*) if smaller.
          * @throws assert if block_size < sizeof(void*) or block_count == 0
-         * @throws std::bad_alloc if the total pool size cannot be represented by std::size_t
+         * @throws std::invalid_argument if alignment is zero or not a power of two
+         * @throws std::bad_alloc if the padded stride or total pool size cannot be represented by std::size_t
          */
-        PoolAllocator(std::size_t block_size, std::size_t block_count);
+        PoolAllocator(std::size_t block_size, std::size_t block_count,
+                      std::size_t alignment = alignof(std::max_align_t));
         ~PoolAllocator();
 
         // Disable copy
@@ -56,8 +61,14 @@ namespace fast_alloc
          */
         void deallocate(void* ptr);
 
-        /** @brief Get the size of each block in bytes. */
+        /** @brief Get the requested size of each block in bytes, excluding padding. */
         [[nodiscard]] std::size_t block_size() const noexcept { return block_size_; }
+
+        /** @brief Get the distance between consecutive blocks in bytes, including padding. */
+        [[nodiscard]] std::size_t block_stride() const noexcept { return block_stride_; }
+
+        /** @brief Get the guaranteed alignment of every block in bytes. */
+        [[nodiscard]] std::size_t alignment() const noexcept { return alignment_; }
 
         /** @brief Get the total capacity (number of blocks). */
         [[nodiscard]] std::size_t capacity() const noexcept { return block_count_; }
@@ -70,6 +81,8 @@ namespace fast_alloc
 
     private:
         std::size_t block_size_;
+        std::size_t block_stride_;
+        std::size_t alignment_;
         std::size_t block_count_;
         std::size_t allocated_count_;
         void* memory_;

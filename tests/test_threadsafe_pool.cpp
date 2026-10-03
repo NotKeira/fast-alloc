@@ -1,10 +1,14 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include "threadsafe_pool_allocator.h"
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <cstring>
 #include <limits>
 #include <new>
+#include <stdexcept>
+#include <unordered_set>
 
 using namespace fast_alloc;
 
@@ -81,6 +85,18 @@ TEST_CASE("ThreadSafePoolAllocator backing size overflow", "[threadsafe_pool][ov
     {
         REQUIRE_THROWS_AS(ThreadSafePoolAllocator(maximum / 2 + 1, 2), std::bad_alloc);
     }
+
+    SECTION("Stride rounding overflow")
+    {
+        REQUIRE_THROWS_AS(ThreadSafePoolAllocator(maximum, 1, 64), std::bad_alloc);
+    }
+
+    SECTION("Padded size overflow when the requested size fits")
+    {
+        constexpr std::size_t block_size = 65;
+        constexpr std::size_t block_count = maximum / block_size;
+        REQUIRE_THROWS_AS(ThreadSafePoolAllocator(block_size, block_count, 64), std::bad_alloc);
+    }
 }
 
 TEST_CASE("ThreadSafePoolAllocator nullptr handling", "[threadsafe_pool]")
@@ -102,6 +118,176 @@ TEST_CASE("ThreadSafePoolAllocator alignment", "[threadsafe_pool]")
     REQUIRE(address % alignof(std::max_align_t) == 0);
 
     pool.deallocate(ptr);
+}
+
+TEST_CASE("ThreadSafePoolAllocator aligns every odd-sized block", "[threadsafe_pool][alignment]")
+{
+    constexpr std::size_t block_size = sizeof(void*) + 1;
+    constexpr std::size_t block_count = alignof(std::max_align_t);
+    ThreadSafePoolAllocator pool(block_size, block_count);
+    std::vector<void*> blocks;
+
+    for (std::size_t i = 0; i < block_count; ++i)
+    {
+        void* ptr = pool.allocate();
+        REQUIRE(ptr != nullptr);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignof(std::max_align_t) == 0);
+        std::memset(ptr, static_cast<int>(i + 1), block_size);
+        blocks.push_back(ptr);
+    }
+    REQUIRE(pool.allocate() == nullptr);
+    REQUIRE(pool.block_size() == block_size);
+
+    for (std::size_t i = 0; i < blocks.size(); ++i)
+    {
+        const auto* bytes = static_cast<const unsigned char*>(blocks[i]);
+        for (std::size_t j = 0; j < block_size; ++j)
+        {
+            REQUIRE(bytes[j] == i + 1);
+        }
+    }
+
+    for (void* ptr : blocks)
+    {
+        pool.deallocate(ptr);
+    }
+    REQUIRE(pool.allocated() == 0);
+
+    for (std::size_t i = 0; i < block_count; ++i)
+    {
+        void* ptr = pool.allocate();
+        REQUIRE(ptr == blocks[block_count - i - 1]);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignof(std::max_align_t) == 0);
+    }
+}
+
+TEST_CASE("ThreadSafePoolAllocator configurable alignment", "[threadsafe_pool][alignment]")
+{
+    const auto block_size = GENERATE(sizeof(void*), sizeof(void*) + 1, 3 * alignof(std::max_align_t));
+    const auto alignment = GENERATE(std::size_t{1}, 2, 4, 8, 16, 32, 64, 128);
+    ThreadSafePoolAllocator pool(block_size, 3, alignment);
+
+    REQUIRE(pool.block_size() == block_size);
+    REQUIRE(pool.alignment() >= alignment);
+    REQUIRE(pool.alignment() >= alignof(void*));
+    REQUIRE(pool.block_stride() >= block_size);
+    REQUIRE(pool.block_stride() % pool.alignment() == 0);
+    REQUIRE(pool.block_stride() - block_size < pool.alignment());
+
+    void* blocks[3];
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        blocks[i] = pool.allocate();
+        REQUIRE(blocks[i] != nullptr);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(blocks[i]) % alignment == 0);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(blocks[i]) % alignof(void*) == 0);
+        if (i > 0)
+        {
+            const auto distance = static_cast<std::byte*>(blocks[i]) - static_cast<std::byte*>(blocks[i - 1]);
+            REQUIRE(static_cast<std::size_t>(distance) == pool.block_stride());
+        }
+    }
+    REQUIRE(pool.allocate() == nullptr);
+
+    for (void* ptr : blocks)
+    {
+        pool.deallocate(ptr);
+    }
+    REQUIRE(pool.allocated() == 0);
+}
+
+TEST_CASE("ThreadSafePoolAllocator supports objects with extended alignment", "[threadsafe_pool][alignment]")
+{
+    struct alignas(64) Object
+    {
+        std::size_t value;
+    };
+
+    ThreadSafePoolAllocator pool(sizeof(Object), 3, alignof(Object));
+    Object* objects[3];
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        void* ptr = pool.allocate();
+        REQUIRE(ptr != nullptr);
+        REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignof(Object) == 0);
+        objects[i] = new (ptr) Object{i};
+    }
+
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        REQUIRE(objects[i]->value == i);
+        objects[i]->~Object();
+        pool.deallocate(objects[i]);
+    }
+}
+
+TEST_CASE("ThreadSafePoolAllocator rejects invalid alignment", "[threadsafe_pool][alignment]")
+{
+    const auto alignment = GENERATE(std::size_t{0}, 3, 24);
+    REQUIRE_THROWS_AS(ThreadSafePoolAllocator(64, 3, alignment), std::invalid_argument);
+}
+
+TEST_CASE("ThreadSafePoolAllocator aligns concurrent odd-sized allocations", "[threadsafe_pool][alignment]")
+{
+    constexpr std::size_t num_threads = 4;
+    constexpr std::size_t blocks_per_thread = 8;
+    constexpr std::size_t block_size = sizeof(void*) + 1;
+    ThreadSafePoolAllocator pool(block_size, num_threads * blocks_per_thread, 64);
+    std::vector<std::thread> threads;
+    std::vector<std::vector<void*>> thread_ptrs(num_threads, std::vector<void*>(blocks_per_thread));
+
+    for (std::size_t i = 0; i < num_threads; ++i)
+    {
+        threads.emplace_back([&pool, &thread_ptrs, i]()
+        {
+            for (auto& ptr : thread_ptrs[i])
+            {
+                ptr = pool.allocate();
+                if (ptr)
+                {
+                    std::memset(ptr, static_cast<int>(i + 1), block_size);
+                }
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+
+    std::unordered_set<void*> unique_blocks;
+    REQUIRE(pool.is_full());
+    for (std::size_t i = 0; i < num_threads; ++i)
+    {
+        for (void* ptr : thread_ptrs[i])
+        {
+            REQUIRE(ptr != nullptr);
+            REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % 64 == 0);
+            REQUIRE(unique_blocks.insert(ptr).second);
+            const auto* bytes = static_cast<const unsigned char*>(ptr);
+            for (std::size_t j = 0; j < block_size; ++j)
+            {
+                REQUIRE(bytes[j] == i + 1);
+            }
+        }
+    }
+
+    threads.clear();
+    for (std::size_t i = 0; i < num_threads; ++i)
+    {
+        threads.emplace_back([&pool, &thread_ptrs, i]()
+        {
+            for (void* ptr : thread_ptrs[i])
+            {
+                pool.deallocate(ptr);
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    REQUIRE(pool.allocated() == 0);
 }
 
 TEST_CASE("ThreadSafePoolAllocator properties", "[threadsafe_pool]")

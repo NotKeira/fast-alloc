@@ -130,6 +130,13 @@ void* obj = pool.allocate();
 pool.deallocate(obj);
 ```
 
+Both pool allocators align every block to `alignof(std::max_align_t)` by default,
+adding trailing padding where needed. An optional third constructor argument
+sets the alignment for types with stricter requirements, such as
+`PoolAllocator(sizeof(T), 1000, alignof(T))`. `block_size()` reports the requested
+size; `block_stride()` includes padding, and `alignment()` reports the guaranteed
+block alignment.
+
 #### Thread-Safe Pool Allocator
 
 ```cpp

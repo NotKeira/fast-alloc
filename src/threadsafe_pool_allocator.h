@@ -17,7 +17,8 @@ namespace fast_alloc
      * network packet pools accessed by multiple threads.
      * 
      * @note Thread-safety: Fully thread-safe using std::mutex.
-     * @note Memory overhead: 0 bytes per allocation (uses free space for intrusive list).
+     * @note No separate per-allocation metadata (uses free space for the intrusive list).
+     * @note Blocks may include trailing padding to meet the requested alignment.
      * @note Fragmentation: None (all blocks same size).
      * @note Performance: Slightly slower than PoolAllocator due to mutex overhead.
      * 
@@ -32,10 +33,14 @@ namespace fast_alloc
          * 
          * @param block_size Size in bytes of each block (must be >= sizeof(void*))
          * @param block_count Number of blocks to allocate
+         * @param alignment Required block alignment (non-zero power of two).
+         *        Defaults to alignof(std::max_align_t); raised to alignof(void*) if smaller.
          * @throws assert if block_size < sizeof(void*) or block_count == 0
-         * @throws std::bad_alloc if the total pool size cannot be represented by std::size_t
+         * @throws std::invalid_argument if alignment is zero or not a power of two
+         * @throws std::bad_alloc if the padded stride or total pool size cannot be represented by std::size_t
          */
-        ThreadSafePoolAllocator(std::size_t block_size, std::size_t block_count);
+        ThreadSafePoolAllocator(std::size_t block_size, std::size_t block_count,
+                               std::size_t alignment = alignof(std::max_align_t));
         ~ThreadSafePoolAllocator();
 
         // Disable copy
@@ -65,8 +70,14 @@ namespace fast_alloc
          */
         void deallocate(void* ptr);
 
-        /** @brief Get the size of each block in bytes (thread-safe). */
+        /** @brief Get the requested block size in bytes, excluding padding (thread-safe). */
         [[nodiscard]] std::size_t block_size() const noexcept { return block_size_; }
+
+        /** @brief Get the distance between consecutive blocks in bytes, including padding (thread-safe). */
+        [[nodiscard]] std::size_t block_stride() const noexcept { return block_stride_; }
+
+        /** @brief Get the guaranteed alignment of every block in bytes (thread-safe). */
+        [[nodiscard]] std::size_t alignment() const noexcept { return alignment_; }
 
         /** @brief Get the total capacity (number of blocks) (thread-safe). */
         [[nodiscard]] std::size_t capacity() const noexcept { return block_count_; }
@@ -88,7 +99,9 @@ namespace fast_alloc
 
     private:
         mutable std::mutex mutex_;               ///< Mutex protecting allocate/deallocate operations
-        std::size_t block_size_;                 ///< Size of each block
+        std::size_t block_size_;                 ///< Requested size of each block
+        std::size_t block_stride_;               ///< Padded distance between blocks
+        std::size_t alignment_;                  ///< Guaranteed block alignment
         std::size_t block_count_;                ///< Total number of blocks
         std::atomic<std::size_t> allocated_count_; ///< Current allocation count
         void* memory_;                           ///< Base memory pointer

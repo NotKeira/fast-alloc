@@ -28,9 +28,9 @@ Custom allocators exploit domain-specific knowledge to eliminate these costs.
 
 Allocation bounds are checked before adding payload sizes, headers and alignment
 padding. Stack and free-list requests that cannot fit return `nullptr` without
-changing allocator state. Both pool constructors check `block_size * block_count`
-before allocating backing memory and throw `std::bad_alloc` if the total size
-cannot be represented by `std::size_t`.
+changing allocator state. Both pool constructors check stride rounding and
+`block_stride * block_count` before allocating backing memory and throw
+`std::bad_alloc` if either size cannot be represented by `std::size_t`.
 
 ## Pool Allocator
 
@@ -56,14 +56,29 @@ Free List (intrusive linked list):
 Block 0 → Block 1 → Block 2 → ... → nullptr
 ```
 
+Both pool allocators keep the requested block size separate from the padded
+stride. Every block starts at a multiple of the configured alignment, which
+defaults to `alignof(std::max_align_t)` and is at least `alignof(void*)` for the
+intrusive free list. This also supports types with extended alignment, such as
+`alignas(64)` objects, through the optional third constructor argument.
+
+For a 28-byte block with 16-byte alignment, each stride contains 28 payload bytes
+and four padding bytes. `block_size()` returns 28, `block_stride()` returns 32,
+and `alignment()` returns 16. Padding does not reduce the configured block count.
+
 ### Implementation Details
 
 **Initialisation:**
 
-1. Allocate one large contiguous block: `block_size * block_count`
-2. Treat each block as a node in a linked list
-3. Store "next" pointer in the first bytes of each free block
-4. No separate metadata needed - uses the free space itself
+1. Validate the alignment and raise it to at least `alignof(void*)`
+2. Round the requested block size up to a multiple of that alignment, checking for overflow
+3. Allocate one contiguous block: `block_stride * block_count`, checking for overflow
+4. Store the "next" pointer in the first bytes of each free block, advancing by the padded stride
+5. Use the same stride for deallocation bounds and block boundary checks
+
+The total size is a multiple of the backing allocation's alignment. Move
+construction and assignment in `PoolAllocator` transfer the stride and alignment
+alongside the backing memory and free list.
 
 **Allocation (O(1)):**
 
@@ -88,7 +103,7 @@ void deallocate(void* ptr) {
 
 - **Allocation**: O(1) - single pointer dereference
 - **Deallocation**: O(1) - two pointer assignments
-- **Memory overhead**: 0 bytes per allocation (uses free space for list)
+- **Memory overhead**: No separate per-allocation metadata; each block may have fewer than `alignment()` padding bytes
 - **Fragmentation**: None (all blocks same size)
 - **Cache performance**: Excellent (contiguous memory)
 
