@@ -84,7 +84,7 @@ Enhancement suggestions are welcome! Please include:
 ### Prerequisites
 
 - C++20 compatible compiler (GCC 10+, Clang 10+, MSVC 2019+)
-- CMake 3.14 or higher
+- CMake 3.20 or higher
 - Git
 
 ### Building
@@ -107,12 +107,14 @@ ctest --test-dir build --output-on-failure
 
 ```
 fast-alloc/
-├── src/                      # Source code
-│   ├── *_allocator.h/cpp    # Allocator implementations
+├── src/                      # Allocator implementations
+│   └── detail/               # Shared aligned-memory ownership
 ├── tests/                    # Unit tests (Catch2)
 ├── benchmarks/               # Performance benchmarks (Google Benchmark)
 ├── docs/                     # Documentation
-└── .github/workflows/        # CI configuration
+├── .github/workflows/        # CI configuration
+├── CMakeLists.txt            # Library, test and benchmark targets
+└── tsan.supp                 # ThreadSanitizer suppressions for Catch2
 ```
 
 ## Code Guidelines
