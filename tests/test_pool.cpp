@@ -244,7 +244,7 @@ TEST_CASE("PoolAllocator supports objects with extended alignment", "[pool][alig
 {
     struct alignas(64) Object
     {
-        std::size_t value;
+        std::size_t values[64 / sizeof(std::size_t)];
     };
 
     PoolAllocator pool(sizeof(Object), 3, alignof(Object));
@@ -254,12 +254,12 @@ TEST_CASE("PoolAllocator supports objects with extended alignment", "[pool][alig
         void* ptr = pool.allocate();
         REQUIRE(ptr != nullptr);
         REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignof(Object) == 0);
-        objects[i] = new (ptr) Object{i};
+        objects[i] = new (ptr) Object{{i}};
     }
 
     for (std::size_t i = 0; i < 3; ++i)
     {
-        REQUIRE(objects[i]->value == i);
+        REQUIRE(objects[i]->values[0] == i);
         objects[i]->~Object();
         pool.deallocate(objects[i]);
     }
