@@ -1,5 +1,7 @@
 #pragma once
 
+#include "detail/aligned_memory.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -28,6 +30,8 @@ namespace fast_alloc
          * 
          * @param size Total size in bytes of the stack memory
          * @throws assert if size == 0
+         * @throws std::bad_alloc if backing size rounding overflows or allocation fails
+         * @note Backing memory padding does not increase the requested capacity.
          */
         explicit StackAllocator(std::size_t size);
         ~StackAllocator();
@@ -91,7 +95,7 @@ namespace fast_alloc
 
     private:
         std::size_t size_;
-        void* memory_;
+        detail::AlignedMemory memory_;
         void* current_;  // Current top of stack
 
         /**

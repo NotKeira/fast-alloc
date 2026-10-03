@@ -7,6 +7,7 @@ For practical usage examples and patterns, see [USAGE.md](USAGE.md).
 ## Table of Contents
 
 - [Design Philosophy](#design-philosophy)
+- [Backing Memory](#backing-memory)
 - [Pool Allocator](#pool-allocator)
 - [Stack Allocator](#stack-allocator)
 - [Free List Allocator](#free-list-allocator)
@@ -31,6 +32,29 @@ padding. Stack and free-list requests that cannot fit return `nullptr` without
 changing allocator state. Both pool constructors check stride rounding and
 `block_stride * block_count` before allocating backing memory and throw
 `std::bad_alloc` if either size cannot be represented by `std::size_t`.
+
+## Backing Memory
+
+All four allocators use a shared internal helper to allocate and own their
+backing memory. It rounds the requested byte count up to a multiple of the
+backing alignment, checking for overflow before allocation. Pool block strides
+use the same checked rounding function.
+
+On Linux and macOS, the helper pairs `std::aligned_alloc` with `std::free`. On
+Windows, it pairs `_aligned_malloc` with `_aligned_free`. A `std::unique_ptr`
+with a platform-specific deleter releases the backing memory during destruction
+and move assignment. Move construction transfers ownership without moving the
+allocated data.
+
+Extra bytes added for backing alignment remain outside the allocator's usable
+capacity. For example, a 257-byte stack backed by 16-byte alignment allocates
+272 bytes, but `capacity()` still returns 257 and allocations cannot use the
+extra 15 bytes. Free-list capacity and accounting follow the same rule; pool
+capacity remains the configured number of blocks.
+
+Unrepresentable rounded sizes and failed backing allocations throw
+`std::bad_alloc`. Existing allocations remain valid when their allocator is
+moved to another instance.
 
 ## Pool Allocator
 

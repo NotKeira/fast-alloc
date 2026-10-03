@@ -11,6 +11,11 @@ High-performance custom memory allocators with comprehensive benchmarks for game
 - **Stack Allocator**: Linear allocator with frame-based reset for temporary allocations
 - **Free List Allocator**: General-purpose allocator with first-fit and best-fit strategies
 
+Stack and free-list capacities can be arbitrary byte counts. Backing memory is
+rounded internally for alignment, while the usable capacity stays as requested.
+All allocators own their backing memory through RAII; unrepresentable backing
+sizes and failed backing allocations throw `std::bad_alloc`.
+
 ## Performance
 
 Benchmarks across multiple platforms demonstrate significant performance improvements over standard allocation:

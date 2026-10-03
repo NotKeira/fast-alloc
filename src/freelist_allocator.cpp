@@ -2,12 +2,7 @@
 
 #include <cassert>
 #include <limits>
-
-#ifdef _WIN32
-#include <malloc.h>
-#else
-#include <cstdlib>
-#endif
+#include <utility>
 
 namespace fast_alloc
 {
@@ -21,40 +16,24 @@ namespace fast_alloc
     {
         assert(size > sizeof(FreeBlock) && "Size must be larger than FreeBlock");
 
-#ifdef _WIN32
-        memory_ = _aligned_malloc(size_, alignof(std::max_align_t));
-#else
-        memory_ = std::aligned_alloc(alignof(std::max_align_t), size_);
-#endif
-        assert(memory_ && "Failed to allocate memory");
+        memory_ = detail::allocate_aligned_memory(size_, alignof(std::max_align_t));
 
         // Initialise with one large free block
-        free_blocks_ = static_cast<FreeBlock*>(memory_);
+        free_blocks_ = static_cast<FreeBlock*>(memory_.get());
         free_blocks_->size = size_;
         free_blocks_->next = nullptr;
     }
 
-    FreeListAllocator::~FreeListAllocator()
-    {
-        if (memory_)
-        {
-#ifdef _WIN32
-            _aligned_free(memory_);
-#else
-            std::free(memory_);
-#endif
-        }
-    }
+    FreeListAllocator::~FreeListAllocator() = default;
 
     FreeListAllocator::FreeListAllocator(FreeListAllocator&& other) noexcept
         : size_(other.size_)
           , used_memory_(other.used_memory_)
           , num_allocations_(other.num_allocations_)
           , strategy_(other.strategy_)
-          , memory_(other.memory_)
+          , memory_(std::move(other.memory_))
           , free_blocks_(other.free_blocks_)
     {
-        other.memory_ = nullptr;
         other.free_blocks_ = nullptr;
         other.size_ = 0;
         other.used_memory_ = 0;
@@ -65,23 +44,13 @@ namespace fast_alloc
     {
         if (this != &other)
         {
-            if (memory_)
-            {
-#ifdef _WIN32
-                _aligned_free(memory_);
-#else
-                std::free(memory_);
-#endif
-            }
-
             size_ = other.size_;
             used_memory_ = other.used_memory_;
             num_allocations_ = other.num_allocations_;
             strategy_ = other.strategy_;
-            memory_ = other.memory_;
+            memory_ = std::move(other.memory_);
             free_blocks_ = other.free_blocks_;
 
-            other.memory_ = nullptr;
             other.free_blocks_ = nullptr;
             other.size_ = 0;
             other.used_memory_ = 0;

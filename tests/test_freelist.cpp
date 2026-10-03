@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <new>
+#include <utility>
 #include <vector>
 
 using namespace fast_alloc;
@@ -63,6 +65,77 @@ TEST_CASE("FreeListAllocator variable sizes", "[freelist]")
     }
 
     REQUIRE(allocator.num_allocations() == 0);
+}
+
+TEST_CASE("FreeListAllocator preserves arbitrary byte capacities", "[freelist][backing_memory]")
+{
+    const auto capacity = GENERATE(std::size_t{65}, 257, 1025);
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    FreeListAllocator allocator(capacity, strategy);
+    REQUIRE(allocator.capacity() == capacity);
+    REQUIRE(allocator.available() == capacity);
+
+    void* probe = allocator.allocate(16);
+    REQUIRE(probe != nullptr);
+    REQUIRE(reinterpret_cast<std::uintptr_t>(probe) % alignof(std::max_align_t) == 0);
+    const std::size_t overhead = allocator.used() - 16;
+    allocator.deallocate(probe);
+    const std::size_t payload = capacity - overhead;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        auto* ptr = static_cast<std::byte*>(allocator.allocate(payload));
+        REQUIRE(ptr != nullptr);
+        std::fill_n(ptr, payload, std::byte{0x5a});
+        REQUIRE(std::all_of(ptr, ptr + payload, [](const std::byte byte)
+        {
+            return byte == std::byte{0x5a};
+        }));
+        REQUIRE(allocator.used() == capacity);
+        REQUIRE(allocator.available() == 0);
+        REQUIRE(allocator.allocate(1) == nullptr);
+        allocator.deallocate(ptr);
+        REQUIRE(allocator.used() == 0);
+        REQUIRE(allocator.available() == capacity);
+    }
+}
+
+TEST_CASE("FreeListAllocator backing size rounding overflow", "[freelist][overflow][backing_memory]")
+{
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    REQUIRE_THROWS_AS(FreeListAllocator(std::numeric_limits<std::size_t>::max(), strategy), std::bad_alloc);
+}
+
+TEST_CASE("FreeListAllocator move assignment transfers backing memory", "[freelist][backing_memory]")
+{
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    FreeListAllocator source(257, strategy);
+    auto* ptr = static_cast<std::byte*>(source.allocate(16));
+    REQUIRE(ptr != nullptr);
+    std::fill_n(ptr, 16, std::byte{0x5a});
+    const std::size_t overhead = source.used() - 16;
+
+    FreeListAllocator destination(129);
+    REQUIRE(destination.allocate(32) != nullptr);
+    destination = std::move(source);
+
+    REQUIRE(destination.capacity() == 257);
+    REQUIRE(destination.num_allocations() == 1);
+    REQUIRE(source.capacity() == 0);
+    REQUIRE(source.used() == 0);
+    REQUIRE(source.num_allocations() == 0);
+    REQUIRE(std::all_of(ptr, ptr + 16, [](const std::byte byte)
+    {
+        return byte == std::byte{0x5a};
+    }));
+    destination.deallocate(ptr);
+    REQUIRE(destination.used() == 0);
+
+    void* replacement = destination.allocate(destination.capacity() - overhead);
+    REQUIRE(replacement != nullptr);
+    REQUIRE(destination.used() == destination.capacity());
+    destination.deallocate(replacement);
+    REQUIRE(destination.available() == destination.capacity());
 }
 
 TEST_CASE("FreeListAllocator strategies", "[freelist]")

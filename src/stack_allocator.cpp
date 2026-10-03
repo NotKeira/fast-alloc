@@ -2,12 +2,7 @@
 
 #include <cassert>
 #include <limits>
-
-#ifdef _WIN32
-#include <malloc.h>
-#else
-#include <cstdlib>
-#endif
+#include <utility>
 
 namespace fast_alloc
 {
@@ -18,34 +13,17 @@ namespace fast_alloc
     {
         assert(size > 0 && "Stack size must be greater than zero");
 
-#ifdef _WIN32
-        memory_ = _aligned_malloc(size_, alignof(std::max_align_t));
-#else
-        memory_ = std::aligned_alloc(alignof(std::max_align_t), size_);
-#endif
-        assert(memory_ && "Failed to allocate stack memory");
-
-        current_ = memory_;
+        memory_ = detail::allocate_aligned_memory(size_, alignof(std::max_align_t));
+        current_ = memory_.get();
     }
 
-    StackAllocator::~StackAllocator()
-    {
-        if (memory_)
-        {
-#ifdef _WIN32
-            _aligned_free(memory_);
-#else
-            std::free(memory_);
-#endif
-        }
-    }
+    StackAllocator::~StackAllocator() = default;
 
     StackAllocator::StackAllocator(StackAllocator&& other) noexcept
         : size_(other.size_)
-          , memory_(other.memory_)
+          , memory_(std::move(other.memory_))
           , current_(other.current_)
     {
-        other.memory_ = nullptr;
         other.current_ = nullptr;
         other.size_ = 0;
     }
@@ -54,20 +32,10 @@ namespace fast_alloc
     {
         if (this != &other)
         {
-            if (memory_)
-            {
-#ifdef _WIN32
-                _aligned_free(memory_);
-#else
-                std::free(memory_);
-#endif
-            }
-
             size_ = other.size_;
-            memory_ = other.memory_;
+            memory_ = std::move(other.memory_);
             current_ = other.current_;
 
-            other.memory_ = nullptr;
             other.current_ = nullptr;
             other.size_ = 0;
         }
@@ -112,7 +80,7 @@ namespace fast_alloc
         if (marker)
         {
             // Validate marker is within our memory range
-            const auto start_address = reinterpret_cast<std::size_t>(memory_);
+            const auto start_address = reinterpret_cast<std::size_t>(memory_.get());
             const std::size_t end_address = start_address + size_;
             const auto marker_address = reinterpret_cast<std::size_t>(marker);
 
@@ -128,7 +96,7 @@ namespace fast_alloc
         else
         {
             // Reset to beginning
-            current_ = memory_;
+            current_ = memory_.get();
         }
     }
 
@@ -139,7 +107,7 @@ namespace fast_alloc
             return 0;
         }
 
-        const auto start = reinterpret_cast<std::size_t>(memory_);
+        const auto start = reinterpret_cast<std::size_t>(memory_.get());
         const auto current = reinterpret_cast<std::size_t>(current_);
 
         return current - start;

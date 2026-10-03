@@ -2,16 +2,10 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cstring>
 #include <limits>
 #include <new>
 #include <stdexcept>
-
-#ifdef _WIN32
-#include <malloc.h>
-#else
-#include <cstdlib>
-#endif
+#include <utility>
 
 namespace fast_alloc
 {
@@ -35,12 +29,7 @@ namespace fast_alloc
         alignment_ = std::max(alignment_, alignof(void*));
 
         // Pad the stride so every block can hold an aligned free list pointer.
-        const std::size_t padding = (alignment_ - block_size_ % alignment_) % alignment_;
-        if (padding > std::numeric_limits<std::size_t>::max() - block_size_)
-        {
-            throw std::bad_alloc();
-        }
-        block_stride_ = block_size_ + padding;
+        block_stride_ = detail::round_up_to_alignment(block_size_, alignment_);
 
         if (block_count_ != 0 && block_stride_ > std::numeric_limits<std::size_t>::max() / block_count_)
         {
@@ -48,15 +37,10 @@ namespace fast_alloc
         }
         const std::size_t pool_size = block_stride_ * block_count_;
 
-#ifdef _WIN32
-        memory_ = _aligned_malloc(pool_size, alignment_);
-#else
-        memory_ = std::aligned_alloc(alignment_, pool_size);
-#endif
-        assert(memory_ && "Failed to allocate memory pool");
+        memory_ = detail::allocate_aligned_memory(pool_size, alignment_);
 
         // Initialise free list - each block points to the next
-        auto* block = static_cast<std::byte*>(memory_);
+        auto* block = static_cast<std::byte*>(memory_.get());
         free_list_ = block;
 
         for (std::size_t i = 0; i < block_count_ - 1; ++i)
@@ -71,17 +55,7 @@ namespace fast_alloc
         *last = nullptr;
     }
 
-    PoolAllocator::~PoolAllocator()
-    {
-        if (memory_)
-        {
-#ifdef _WIN32
-            _aligned_free(memory_);
-#else
-            std::free(memory_);
-#endif
-        }
-    }
+    PoolAllocator::~PoolAllocator() = default;
 
     PoolAllocator::PoolAllocator(PoolAllocator&& other) noexcept
         : block_size_(other.block_size_)
@@ -89,10 +63,9 @@ namespace fast_alloc
           , alignment_(other.alignment_)
           , block_count_(other.block_count_)
           , allocated_count_(other.allocated_count_)
-          , memory_(other.memory_)
+          , memory_(std::move(other.memory_))
           , free_list_(other.free_list_)
     {
-        other.memory_ = nullptr;
         other.free_list_ = nullptr;
         other.allocated_count_ = 0;
     }
@@ -101,24 +74,14 @@ namespace fast_alloc
     {
         if (this != &other)
         {
-            if (memory_)
-            {
-#ifdef _WIN32
-                _aligned_free(memory_);
-#else
-                std::free(memory_);
-#endif
-            }
-
             block_size_ = other.block_size_;
             block_stride_ = other.block_stride_;
             alignment_ = other.alignment_;
             block_count_ = other.block_count_;
             allocated_count_ = other.allocated_count_;
-            memory_ = other.memory_;
+            memory_ = std::move(other.memory_);
             free_list_ = other.free_list_;
 
-            other.memory_ = nullptr;
             other.free_list_ = nullptr;
             other.allocated_count_ = 0;
         }
@@ -151,7 +114,7 @@ namespace fast_alloc
 
         // Validate pointer is within our memory range
         const auto ptr_address = reinterpret_cast<std::size_t>(ptr);
-        const auto memory_start = reinterpret_cast<std::size_t>(memory_);
+        const auto memory_start = reinterpret_cast<std::size_t>(memory_.get());
         const auto memory_end = memory_start + (block_stride_ * block_count_);
 
         assert(ptr_address >= memory_start && ptr_address < memory_end

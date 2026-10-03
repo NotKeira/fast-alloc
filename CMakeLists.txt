@@ -27,6 +27,7 @@ option(BUILD_BENCHMARKS "Build benchmarks" ON)
 
 # Main library
 add_library(fast_alloc STATIC
+        src/detail/aligned_memory.cpp
         src/pool_allocator.cpp
         src/stack_allocator.cpp
         src/freelist_allocator.cpp

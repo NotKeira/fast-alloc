@@ -1,5 +1,7 @@
 #pragma once
 
+#include "detail/aligned_memory.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -40,6 +42,8 @@ namespace fast_alloc
          * @param size Total size in bytes of memory to manage
          * @param strategy Allocation strategy (FirstFit or BestFit)
          * @throws assert if size <= sizeof(FreeBlock)
+         * @throws std::bad_alloc if backing size rounding overflows or allocation fails
+         * @note Backing memory padding does not increase the requested capacity.
          */
         explicit FreeListAllocator(std::size_t size, FreeListStrategy strategy = FreeListStrategy::FirstFit);
         ~FreeListAllocator();
@@ -114,7 +118,7 @@ namespace fast_alloc
         std::size_t used_memory_;
         std::size_t num_allocations_;
         FreeListStrategy strategy_;
-        void* memory_;
+        detail::AlignedMemory memory_;
         FreeBlock* free_blocks_; ///< Head of free list (sorted by address for coalescence)
 
         /**

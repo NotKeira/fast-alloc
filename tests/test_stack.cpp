@@ -1,7 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include "stack_allocator.h"
+#include <algorithm>
 #include <limits>
+#include <new>
+#include <utility>
 
 using namespace fast_alloc;
 
@@ -104,6 +107,61 @@ TEST_CASE("StackAllocator exhaustion", "[stack]")
 
     void* ptr3 = stack.allocate(100);
     REQUIRE(ptr3 == nullptr);
+}
+
+TEST_CASE("StackAllocator preserves arbitrary byte capacities", "[stack][backing_memory]")
+{
+    const auto capacity = GENERATE(std::size_t{1}, alignof(std::max_align_t) + 1, 257);
+    StackAllocator stack(capacity);
+    REQUIRE(stack.capacity() == capacity);
+    REQUIRE(stack.available() == capacity);
+
+    auto* ptr = static_cast<std::byte*>(stack.allocate(capacity, 1));
+    REQUIRE(ptr != nullptr);
+    REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignof(std::max_align_t) == 0);
+    std::fill_n(ptr, capacity, std::byte{0x5a});
+    REQUIRE(std::all_of(ptr, ptr + capacity, [](const std::byte byte)
+    {
+        return byte == std::byte{0x5a};
+    }));
+    REQUIRE(stack.used() == capacity);
+    REQUIRE(stack.available() == 0);
+    REQUIRE(stack.allocate(1, 1) == nullptr);
+
+    stack.reset();
+    REQUIRE(stack.available() == capacity);
+    REQUIRE(stack.allocate(capacity, 1) == ptr);
+    REQUIRE(stack.allocate(1, 1) == nullptr);
+}
+
+TEST_CASE("StackAllocator backing size rounding overflow", "[stack][overflow][backing_memory]")
+{
+    REQUIRE_THROWS_AS(StackAllocator(std::numeric_limits<std::size_t>::max()), std::bad_alloc);
+}
+
+TEST_CASE("StackAllocator move assignment transfers backing memory", "[stack][backing_memory]")
+{
+    StackAllocator source(257);
+    auto* ptr = static_cast<std::byte*>(source.allocate(17, 1));
+    REQUIRE(ptr != nullptr);
+    std::fill_n(ptr, 17, std::byte{0x5a});
+
+    StackAllocator destination(129);
+    REQUIRE(destination.allocate(65, 1) != nullptr);
+    destination = std::move(source);
+
+    REQUIRE(destination.capacity() == 257);
+    REQUIRE(destination.used() == 17);
+    REQUIRE(source.capacity() == 0);
+    REQUIRE(source.used() == 0);
+    REQUIRE(std::all_of(ptr, ptr + 17, [](const std::byte byte)
+    {
+        return byte == std::byte{0x5a};
+    }));
+    REQUIRE(destination.allocate(destination.available(), 1) == ptr + 17);
+    REQUIRE(destination.used() == destination.capacity());
+    destination.reset();
+    REQUIRE(destination.allocate(destination.capacity(), 1) == ptr);
 }
 
 TEST_CASE("StackAllocator allocation size overflow", "[stack][overflow]")

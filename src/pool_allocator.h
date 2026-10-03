@@ -1,5 +1,7 @@
 #pragma once
 
+#include "detail/aligned_memory.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -30,7 +32,7 @@ namespace fast_alloc
          *        Defaults to alignof(std::max_align_t); raised to alignof(void*) if smaller.
          * @throws assert if block_size < sizeof(void*) or block_count == 0
          * @throws std::invalid_argument if alignment is zero or not a power of two
-         * @throws std::bad_alloc if the padded stride or total pool size cannot be represented by std::size_t
+         * @throws std::bad_alloc if the padded stride or total pool size overflows, or backing allocation fails
          */
         PoolAllocator(std::size_t block_size, std::size_t block_count,
                       std::size_t alignment = alignof(std::max_align_t));
@@ -85,7 +87,7 @@ namespace fast_alloc
         std::size_t alignment_;
         std::size_t block_count_;
         std::size_t allocated_count_;
-        void* memory_;
+        detail::AlignedMemory memory_;
         void* free_list_;  // Intrusive linked list of free blocks
     };
 } // namespace fast_alloc

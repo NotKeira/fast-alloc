@@ -2,16 +2,9 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cstring>
 #include <limits>
 #include <new>
 #include <stdexcept>
-
-#ifdef _WIN32
-#include <malloc.h>
-#else
-#include <cstdlib>
-#endif
 
 namespace fast_alloc
 {
@@ -35,12 +28,7 @@ namespace fast_alloc
         alignment_ = std::max(alignment_, alignof(void*));
 
         // Pad the stride so every block can hold an aligned free list pointer.
-        const std::size_t padding = (alignment_ - block_size_ % alignment_) % alignment_;
-        if (padding > std::numeric_limits<std::size_t>::max() - block_size_)
-        {
-            throw std::bad_alloc();
-        }
-        block_stride_ = block_size_ + padding;
+        block_stride_ = detail::round_up_to_alignment(block_size_, alignment_);
 
         if (block_count_ != 0 && block_stride_ > std::numeric_limits<std::size_t>::max() / block_count_)
         {
@@ -48,15 +36,10 @@ namespace fast_alloc
         }
         const std::size_t pool_size = block_stride_ * block_count_;
 
-#ifdef _WIN32
-        memory_ = _aligned_malloc(pool_size, alignment_);
-#else
-        memory_ = std::aligned_alloc(alignment_, pool_size);
-#endif
-        assert(memory_ && "Failed to allocate memory pool");
+        memory_ = detail::allocate_aligned_memory(pool_size, alignment_);
 
         // Initialise free list - each block points to the next
-        auto* block = static_cast<std::byte*>(memory_);
+        auto* block = static_cast<std::byte*>(memory_.get());
 
         for (std::size_t i = 0; i < block_count_ - 1; ++i)
         {
@@ -70,20 +53,10 @@ namespace fast_alloc
         *last = nullptr;
 
         // Set initial free list head
-        free_list_.store(memory_, std::memory_order_release);
+        free_list_.store(memory_.get(), std::memory_order_release);
     }
 
-    ThreadSafePoolAllocator::~ThreadSafePoolAllocator()
-    {
-        if (memory_)
-        {
-#ifdef _WIN32
-            _aligned_free(memory_);
-#else
-            std::free(memory_);
-#endif
-        }
-    }
+    ThreadSafePoolAllocator::~ThreadSafePoolAllocator() = default;
 
     void* ThreadSafePoolAllocator::allocate()
     {
@@ -107,7 +80,7 @@ namespace fast_alloc
 
         // Validate pointer is within our memory range
         const auto ptr_address = reinterpret_cast<std::size_t>(ptr);
-        const auto memory_start = reinterpret_cast<std::size_t>(memory_);
+        const auto memory_start = reinterpret_cast<std::size_t>(memory_.get());
         const auto memory_end = memory_start + (block_stride_ * block_count_);
 
         assert(ptr_address >= memory_start && ptr_address < memory_end
