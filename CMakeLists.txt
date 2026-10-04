@@ -62,6 +62,12 @@ if (BUILD_TESTS)
     )
     FetchContent_MakeAvailable(Catch2)
 
+    # Match the tests' language standard so Catch2's optional formatters agree.
+    # Dependency providers can supply an already-built imported package instead.
+    if (TARGET Catch2)
+        target_compile_features(Catch2 PUBLIC cxx_std_20)
+    endif ()
+
     add_executable(alloc_tests
             tests/test_main.cpp
             tests/test_pool.cpp

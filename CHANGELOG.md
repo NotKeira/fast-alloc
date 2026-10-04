@@ -21,6 +21,8 @@
 - Support CMake consumers using `add_subdirectory()`, export C++20 and threading
   requirements, and apply Release flags with multi-configuration generators.
 - Keep project warning and optimisation flags out of fetched dependencies.
+- Build fetched Catch2 with C++20 so its formatters match the test headers on
+  platforms whose compilers default to an older language standard.
 - Run concurrent pool assertions after worker threads join to avoid intermittent
   Catch2 failures.
 
