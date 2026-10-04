@@ -403,7 +403,6 @@ TEST_CASE("ThreadSafePoolAllocator concurrent allocations", "[threadsafe_pool]")
             for (std::size_t j = 0; j < allocs_per_thread; ++j)
             {
                 void* ptr = pool.allocate();
-                REQUIRE(ptr != nullptr);
                 thread_ptrs[i].push_back(ptr);
             }
         });
@@ -416,6 +415,14 @@ TEST_CASE("ThreadSafePoolAllocator concurrent allocations", "[threadsafe_pool]")
 
     REQUIRE(pool.allocated() == total_blocks);
     REQUIRE(pool.is_full());
+
+    for (const auto& ptrs : thread_ptrs)
+    {
+        for (void* ptr : ptrs)
+        {
+            REQUIRE(ptr != nullptr);
+        }
+    }
 
     threads.clear();
     for (std::size_t i = 0; i < num_threads; ++i)

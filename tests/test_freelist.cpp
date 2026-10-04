@@ -5,6 +5,7 @@
 #include <array>
 #include <limits>
 #include <new>
+#include <random>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -580,4 +581,117 @@ TEST_CASE("FreeListAllocator nullptr handling", "[freelist]")
 
     allocator.deallocate(nullptr);
     REQUIRE(allocator.num_allocations() == 0);
+}
+
+TEST_CASE("FreeListAllocator mixed allocation and free sequences", "[freelist][regression]")
+{
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    const auto capacity = GENERATE(std::size_t{4096}, std::size_t{4099});
+    const auto seed = GENERATE(std::uint32_t{1}, std::uint32_t{42}, std::uint32_t{2026});
+    CAPTURE(strategy, capacity, seed);
+
+    FreeListAllocator allocator(capacity, strategy);
+    std::mt19937 random(seed);
+    constexpr std::array<std::size_t, 12> sizes = {1, 3, 7, 15, 17, 31, 63, 65, 127, 257, 513, 1023};
+    constexpr std::array<std::size_t, 8> alignments = {1, 2, 4, 8, 16, 32, 64, 256};
+
+    struct Allocation
+    {
+        std::byte* ptr;
+        std::size_t size;
+        std::size_t reserved;
+        std::byte value;
+    };
+    std::vector<Allocation> live;
+    std::size_t reserved = 0;
+    std::size_t successes = 0;
+    std::size_t failures = 0;
+
+    const auto verify_live_allocations = [&]()
+    {
+        REQUIRE(allocator.num_allocations() == live.size());
+        REQUIRE(allocator.used() == reserved);
+        REQUIRE(allocator.used() <= capacity);
+        REQUIRE(allocator.available() == capacity - reserved);
+        for (const auto& allocation : live)
+        {
+            REQUIRE(std::all_of(allocation.ptr, allocation.ptr + allocation.size,
+                [&](const std::byte byte) { return byte == allocation.value; }));
+        }
+    };
+
+    const auto free_one = [&]()
+    {
+        const std::size_t index = random() % live.size();
+        allocator.deallocate(live[index].ptr);
+        reserved -= live[index].reserved;
+        live[index] = live.back();
+        live.pop_back();
+    };
+
+    for (std::size_t step = 0; step < 1200; ++step)
+    {
+        CAPTURE(step);
+        if (!live.empty() && random() % 4 == 0)
+        {
+            free_one();
+        }
+        else
+        {
+            // Select requests directly from the engine for reproducible random values.
+            const std::size_t size = sizes[random() % sizes.size()];
+            const std::size_t alignment = alignments[random() % alignments.size()];
+            CAPTURE(size, alignment);
+            auto* ptr = static_cast<std::byte*>(allocator.allocate(size, alignment));
+            if (ptr)
+            {
+                REQUIRE(reinterpret_cast<std::uintptr_t>(ptr) % alignment == 0);
+                const auto start = reinterpret_cast<std::uintptr_t>(ptr);
+                for (const auto& allocation : live)
+                {
+                    const auto other = reinterpret_cast<std::uintptr_t>(allocation.ptr);
+                    REQUIRE((start + size <= other || other + allocation.size <= start));
+                }
+
+                REQUIRE(allocator.used() >= reserved + size);
+                const std::size_t block_size = allocator.used() - reserved;
+                const auto value = static_cast<std::byte>(1 + step % 255);
+                std::fill_n(ptr, size, value);
+                live.push_back({ptr, size, block_size, value});
+                reserved += block_size;
+                ++successes;
+            }
+            else
+            {
+                ++failures;
+            }
+        }
+        verify_live_allocations();
+    }
+
+    REQUIRE(successes > 0);
+    REQUIRE(failures > 0);
+    while (!live.empty())
+    {
+        free_one();
+        verify_live_allocations();
+    }
+
+    // Full accounting recovery must also leave one contiguous, reusable free block.
+    void* probe = allocator.allocate(1, 1);
+    REQUIRE(probe != nullptr);
+    const std::size_t overhead = allocator.used() - 1;
+    allocator.deallocate(probe);
+
+    auto* whole = static_cast<std::byte*>(allocator.allocate(capacity - overhead, 1));
+    REQUIRE(whole != nullptr);
+    REQUIRE(allocator.used() == capacity);
+    REQUIRE(allocator.available() == 0);
+    REQUIRE(allocator.num_allocations() == 1);
+    REQUIRE(allocator.allocate(1, 1) == nullptr);
+    std::fill_n(whole, capacity - overhead, std::byte{0xa5});
+    REQUIRE(std::all_of(whole, whole + capacity - overhead,
+        [](const std::byte byte) { return byte == std::byte{0xa5}; }));
+    allocator.deallocate(whole);
+    verify_live_allocations();
 }
