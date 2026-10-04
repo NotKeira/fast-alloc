@@ -19,13 +19,16 @@ function(fast_alloc_configure_target target)
         target_compile_options(${target} PRIVATE
                 -Wall -Wextra -Wpedantic -Werror
                 "$<$<CONFIG:Release>:-O3>"
-                "$<$<CONFIG:Release>:-march=native>"
         )
+        if (FAST_ALLOC_NATIVE_ARCH)
+            target_compile_options(${target} PRIVATE "$<$<CONFIG:Release>:-march=native>")
+        endif ()
     endif ()
 endfunction()
 
 option(BUILD_TESTS "Build unit tests" ON)
 option(BUILD_BENCHMARKS "Build benchmarks" ON)
+option(FAST_ALLOC_NATIVE_ARCH "Optimise non-MSVC Release builds for the build machine's CPU" OFF)
 
 find_package(Threads REQUIRED)
 

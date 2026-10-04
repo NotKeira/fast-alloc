@@ -99,9 +99,11 @@ with a minimum run time of 0.1 seconds;
 - **Thread-Safe Pool**: Single-thread timings include the cost of synchronisation;
   these measurements do not establish performance under contention.
 
-To reproduce the Linux measurements after building in Release mode:
+To run the Linux benchmarks with the recorded compiler settings:
 
 ```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DFAST_ALLOC_NATIVE_ARCH=ON
+cmake --build build --config Release
 taskset -c 2 ./build/alloc_benchmarks \
   --benchmark_filter='^(BM_.*_Allocate|BM_StackAllocator_FramePattern/1000|BM_Malloc_FramePattern/1000|BM_FreeListAllocator_(FirstFit|BestFit)|BM_Malloc_Compare|BM_ThreadSafePoolAllocator_SingleThread)$' \
   --benchmark_min_time=0.5s --benchmark_min_warmup_time=0.1 \
@@ -137,9 +139,12 @@ and Google Benchmark 1.9.1 for benchmarks, so the initial configuration needs
 access to GitHub. The library target is `fast_alloc`; the executable targets are
 `alloc_tests` and `alloc_benchmarks`.
 
-Non-MSVC Release builds use `-O3 -march=native`, so their generated code depends
-on the build machine's CPU. Warning and optimisation flags apply only to this
-project's targets. Release flags follow the selected configuration with both
+Non-MSVC Release builds use `-O3` without selecting the build machine's CPU by
+default. To enable `-march=native`, configure with `-DFAST_ALLOC_NATIVE_ARCH=ON`;
+this makes the generated code depend on the build machine's CPU and its support
+in the compiler. The recorded Linux and macOS benchmark results used native CPU
+optimisation. Warning and optimisation flags apply only to this project's
+targets. Release flags follow the selected configuration with both
 single-configuration and multi-configuration generators.
 
 ### Windows (MSVC, Visual Studio)

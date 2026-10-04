@@ -28,6 +28,8 @@
 
 ### Changed
 
+- Make native CPU optimisation opt-in with `FAST_ALLOC_NATIVE_ARCH`, disabled by
+  default, to avoid compiler feature-detection failures on hosted CI runners.
 - Simplify mutex-protected pool bookkeeping while keeping atomic statistics reads.
 - Use persistent workers sharing one pool in threaded benchmarks, with matching
   worker counts for the `new/delete` comparison.
