@@ -39,8 +39,9 @@ Results depend on the machine and workload.
 
 Allocate/free rows include both operations; stack rows include allocation and
 reset. Frame timings cover 1,000 allocations followed by one stack reset or 1,000
-calls to `free`. The `malloc` frame benchmark also allocates and releases a pointer
-array. Custom allocators reserve their backing storage before the timed loops.
+calls to `free`. In these recorded results, the `malloc` frame benchmark also
+allocates and releases a pointer array. Custom allocators reserve their backing
+storage before the timed loops.
 Thread-safe pool results use one thread and include mutex locking.
 
 ### Linux (GCC Release)
@@ -117,7 +118,14 @@ allocates then frees the selected batch size per worker with four workers.
 `items_per_second` counts successful allocation/free pairs across all workers;
 these benchmarks use wall-clock time (`UseRealTime`). Their names now include
 `threads:2`, `threads:4` or `threads:8`, rather than a thread-count argument.
-The single-thread statistics above are unaffected by this benchmark change.
+Pool bulk benchmarks now reuse one pool and preallocated pointer buffers across
+iterations. The `new/delete` bulk and `malloc` frame comparisons also reuse their
+pointer buffers. Timed work covers payload allocation and deallocation; stack
+frames end with a reset. Throughput counts allocation/free pairs, or allocations
+followed by a stack reset. Each reported time still covers one complete batch.
+The recorded frame statistics above predate this setup change and include pointer
+array allocation in the `malloc` comparison; fresh frame results are not directly
+comparable with those recorded timings.
 
 ## Building
 

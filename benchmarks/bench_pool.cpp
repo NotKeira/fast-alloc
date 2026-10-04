@@ -40,29 +40,41 @@ BENCHMARK(BM_NewDelete_Allocate);
 static void BM_PoolAllocator_BulkAllocate(benchmark::State& state)
 {
     const std::size_t num_allocs = state.range(0);
+    constexpr std::size_t block_count = 10000;
+    constexpr std::size_t block_size = 64;
+    PoolAllocator pool(block_size, block_count);
+    std::vector<void*> ptrs(num_allocs);
+    int64_t completed = 0;
 
     for (auto _ : state)
     {
-        constexpr std::size_t block_count = 10000;
-        constexpr std::size_t block_size = 64;
-        PoolAllocator pool(block_size, block_count);
-        std::vector<void*> ptrs;
-        ptrs.reserve(num_allocs);
-
-        for (std::size_t i = 0; i < num_allocs; ++i)
+        for (auto& ptr : ptrs)
         {
-            ptrs.push_back(pool.allocate());
+            ptr = pool.allocate();
         }
 
         benchmark::DoNotOptimize(ptrs.data());
+        benchmark::ClobberMemory();
 
         for (void* ptr : ptrs)
         {
-            pool.deallocate(ptr);
+            if (ptr)
+            {
+                pool.deallocate(ptr);
+                ++completed;
+            }
         }
     }
 
-    state.SetItemsProcessed(state.iterations() * num_allocs);
+    state.SetItemsProcessed(completed);
+    if (completed != state.iterations() * state.range(0))
+    {
+        state.SkipWithError("Pool exhausted during benchmark");
+    }
+    if (pool.allocated() != 0)
+    {
+        state.SkipWithError("Pool still has outstanding allocations");
+    }
 }
 
 BENCHMARK(BM_PoolAllocator_BulkAllocate)->Arg(100)->Arg(1000)->Arg(5000);
@@ -70,19 +82,18 @@ BENCHMARK(BM_PoolAllocator_BulkAllocate)->Arg(100)->Arg(1000)->Arg(5000);
 static void BM_NewDelete_BulkAllocate(benchmark::State& state)
 {
     const std::size_t num_allocs = state.range(0);
+    std::vector<void*> ptrs(num_allocs);
 
     for (auto _ : state)
     {
-        std::vector<void*> ptrs;
-        ptrs.reserve(num_allocs);
-
-        for (std::size_t i = 0; i < num_allocs; ++i)
+        for (auto& ptr : ptrs)
         {
             constexpr std::size_t block_size = 64;
-            ptrs.push_back(operator new(block_size));
+            ptr = operator new(block_size);
         }
 
         benchmark::DoNotOptimize(ptrs.data());
+        benchmark::ClobberMemory();
 
         for (void* ptr : ptrs)
         {

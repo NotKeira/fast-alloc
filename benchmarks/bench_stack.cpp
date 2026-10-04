@@ -1,5 +1,6 @@
 #include <benchmark/benchmark.h>
 #include "stack_allocator.h"
+#include <vector>
 
 using namespace fast_alloc;
 
@@ -59,27 +60,34 @@ BENCHMARK(BM_StackAllocator_FramePattern)->Arg(10)->Arg(100)->Arg(1000);
 static void BM_Malloc_FramePattern(benchmark::State& state)
 {
     const std::size_t allocs_per_frame = state.range(0);
+    std::vector<void*> ptrs(allocs_per_frame);
+    int64_t completed = 0;
 
     for (auto _ : state)
     {
-        void** ptrs = new void*[allocs_per_frame];
-
-        for (std::size_t i = 0; i < allocs_per_frame; ++i)
+        for (auto& ptr : ptrs)
         {
-            ptrs[i] = malloc(64);
+            ptr = malloc(64);
         }
 
-        benchmark::DoNotOptimize(ptrs);
+        benchmark::DoNotOptimize(ptrs.data());
+        benchmark::ClobberMemory();
 
-        for (std::size_t i = 0; i < allocs_per_frame; ++i)
+        for (void* ptr : ptrs)
         {
-            free(ptrs[i]);
+            if (ptr)
+            {
+                free(ptr);
+                ++completed;
+            }
         }
-
-        delete[] ptrs;
     }
 
-    state.SetItemsProcessed(state.iterations() * allocs_per_frame);
+    state.SetItemsProcessed(completed);
+    if (completed != state.iterations() * state.range(0))
+    {
+        state.SkipWithError("malloc failed during benchmark");
+    }
 }
 
 BENCHMARK(BM_Malloc_FramePattern)->Arg(10)->Arg(100)->Arg(1000);
