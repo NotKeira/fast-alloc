@@ -256,6 +256,7 @@ fast-alloc/
 │   └── test_threadsafe_pool.cpp
 ├── .editorconfig
 ├── .gitignore
+├── CHANGELOG.md                    # Release notes and upgrade information
 ├── CMakeLists.txt                  # Library, test and benchmark targets
 ├── CONTRIBUTING.md
 ├── LICENSE
@@ -420,6 +421,8 @@ CI builds and tests Debug and Release configurations on Windows (MSVC), Linux
 detection, TSan with the Catch2 suppressions in `tsan.supp`, and UBSan.
 
 ## Contributing
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and upgrade information.
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
