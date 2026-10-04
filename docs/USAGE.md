@@ -113,6 +113,11 @@ Block sizes, padding and the optional alignment argument follow the same rules
 as [PoolAllocator](#block-alignment). All blocks retain their alignment during
 concurrent allocation and deallocation.
 
+`allocated()` and `is_full()` read atomic snapshots without taking the pool mutex.
+They do not reserve blocks or synchronise access to allocated objects. Another
+thread can change the pool state between a statistics read and an allocation;
+always check the pointer returned by `allocate()`.
+
 ### Multi-threaded Audio System
 
 ```cpp

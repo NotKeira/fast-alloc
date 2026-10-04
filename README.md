@@ -374,7 +374,7 @@ The Catch2 test suite covers:
 - Invalid constructor parameters and allocation requests in Debug and Release
 - Default and explicit alignment, including odd-sized pool blocks
 - Arbitrary byte capacities and free-list split/coalescence accounting
-- Concurrent stress tests for thread-safe variants
+- Concurrent allocation, deallocation and statistics reads for the thread-safe pool
 
 CI builds and tests Debug and Release configurations on Windows (MSVC), Linux
 (GCC and Clang) and macOS (Apple Clang). Separate Linux jobs run ASan with leak

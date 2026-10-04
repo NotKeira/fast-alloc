@@ -327,6 +327,64 @@ TEST_CASE("ThreadSafePoolAllocator properties", "[threadsafe_pool]")
     REQUIRE_FALSE(pool.is_full());
 }
 
+TEST_CASE("ThreadSafePoolAllocator concurrent statistics", "[threadsafe_pool][statistics]")
+{
+    constexpr std::size_t num_threads = 4;
+    constexpr std::size_t operations = 1000;
+    ThreadSafePoolAllocator pool(64, num_threads + 1);
+    std::atomic<bool> stop{false};
+    std::atomic<bool> valid{true};
+    std::atomic<std::size_t> samples{0};
+
+    std::thread observer([&pool, &stop, &valid, &samples]()
+    {
+        while (!stop.load(std::memory_order_acquire))
+        {
+            if (pool.allocated() > num_threads || pool.is_full())
+            {
+                valid.store(false, std::memory_order_relaxed);
+            }
+            samples.fetch_add(1, std::memory_order_relaxed);
+            std::this_thread::yield();
+        }
+    });
+
+    while (samples.load(std::memory_order_relaxed) == 0)
+    {
+        std::this_thread::yield();
+    }
+
+    std::vector<std::thread> workers;
+    for (std::size_t i = 0; i < num_threads; ++i)
+    {
+        workers.emplace_back([&pool, &valid]()
+        {
+            for (std::size_t j = 0; j < operations; ++j)
+            {
+                if (void* ptr = pool.allocate())
+                {
+                    pool.deallocate(ptr);
+                }
+                else
+                {
+                    valid.store(false, std::memory_order_relaxed);
+                }
+            }
+        });
+    }
+
+    for (auto& worker : workers)
+    {
+        worker.join();
+    }
+    stop.store(true, std::memory_order_release);
+    observer.join();
+
+    REQUIRE(valid.load(std::memory_order_relaxed));
+    REQUIRE(pool.allocated() == 0);
+    REQUIRE_FALSE(pool.is_full());
+}
+
 TEST_CASE("ThreadSafePoolAllocator concurrent allocations", "[threadsafe_pool]")
 {
     constexpr std::size_t num_threads = 4;

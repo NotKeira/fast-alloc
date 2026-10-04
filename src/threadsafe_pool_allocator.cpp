@@ -59,7 +59,7 @@ namespace fast_alloc
         *last = nullptr;
 
         // Set initial free list head
-        free_list_.store(memory_.get(), std::memory_order_release);
+        free_list_ = memory_.get();
     }
 
     ThreadSafePoolAllocator::~ThreadSafePoolAllocator() = default;
@@ -68,12 +68,13 @@ namespace fast_alloc
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        void* ptr = free_list_.load(std::memory_order_relaxed);
+        void* ptr = free_list_;
         if (!ptr) return nullptr;
 
         void* next = *static_cast<void**>(ptr);
-        free_list_.store(next, std::memory_order_relaxed);
-        allocated_count_.fetch_add(1, std::memory_order_relaxed);
+        free_list_ = next;
+        const std::size_t count = allocated_count_.load(std::memory_order_relaxed);
+        allocated_count_.store(count + 1, std::memory_order_relaxed);
 
         return ptr;
     }
@@ -83,6 +84,9 @@ namespace fast_alloc
         if (!ptr) return;
 
         std::lock_guard<std::mutex> lock(mutex_);
+
+        const std::size_t count = allocated_count_.load(std::memory_order_relaxed);
+        assert(count > 0 && "Deallocating from empty pool");
 
         // Validate pointer is within our memory range
         const auto ptr_address = reinterpret_cast<std::size_t>(ptr);
@@ -100,8 +104,8 @@ namespace fast_alloc
         (void)ptr_address;
         (void)memory_end;
 
-        *static_cast<void**>(ptr) = free_list_.load(std::memory_order_relaxed);
-        free_list_.store(ptr, std::memory_order_relaxed);
-        allocated_count_.fetch_sub(1, std::memory_order_relaxed);
+        *static_cast<void**>(ptr) = free_list_;
+        free_list_ = ptr;
+        allocated_count_.store(count - 1, std::memory_order_relaxed);
     }
 } // namespace fast_alloc

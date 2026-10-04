@@ -9,6 +9,7 @@ For practical usage examples and patterns, see [USAGE.md](USAGE.md).
 - [Design Philosophy](#design-philosophy)
 - [Backing Memory](#backing-memory)
 - [Pool Allocator](#pool-allocator)
+- [Thread-Safe Pool Allocator](#thread-safe-pool-allocator)
 - [Stack Allocator](#stack-allocator)
 - [Free List Allocator](#free-list-allocator)
 - [Performance Analysis](#performance-analysis)
@@ -161,6 +162,24 @@ void deallocate(void* ptr) {
 - Must know maximum capacity upfront
 - Cannot grow dynamically
 - Allocations fail when pool exhausted
+
+## Thread-Safe Pool Allocator
+
+`ThreadSafePoolAllocator` uses the same padded block layout as `PoolAllocator`.
+A mutex serialises allocation and deallocation, including all free-list access
+and allocation-count updates. The free-list head is an ordinary pointer because
+every access after construction holds that mutex.
+
+The allocation count remains atomic so `allocated()` and `is_full()` can read
+statistics without taking the mutex. Writers use relaxed loads and stores while
+holding the mutex; atomic read-modify-write operations are unnecessary because
+the mutex already serialises the writers. The counter does not publish object
+contents or replace the mutex protecting the free list.
+
+Statistics are snapshots: concurrent allocations and frees can change the count
+between calls. Checking `is_full()` does not reserve a block, so callers must
+check the result of `allocate()`. Pool destruction requires all users to have
+finished accessing the allocator.
 
 ## Stack Allocator
 
@@ -489,7 +508,9 @@ All benchmarks run on:
 ### Production Considerations
 
 **Thread Safety:**
-Current implementations are single-threaded. For multithreaded use:
+`ThreadSafePoolAllocator` protects allocation and deallocation with a mutex.
+The other allocators require external synchronisation when shared. Alternatives
+for multithreaded workloads include:
 
 - Add mutex locks (simplest, adds overhead)
 - Use lock-free atomics (complex, high performance)

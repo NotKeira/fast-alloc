@@ -87,26 +87,27 @@ namespace fast_alloc
         /**
          * @brief Get the number of currently allocated blocks (thread-safe).
          * @note Uses relaxed memory ordering for performance.
+         * @note Returns a snapshot; concurrent allocation or deallocation can change it immediately.
          */
         [[nodiscard]] std::size_t allocated() const noexcept
         {
             return allocated_count_.load(std::memory_order_relaxed);
         }
 
-        /** @brief Check if the pool is full (thread-safe). */
+        /** @brief Check if the pool is full (thread-safe snapshot; does not reserve blocks). */
         [[nodiscard]] bool is_full() const noexcept
         {
             return allocated() >= block_count_;
         }
 
     private:
-        mutable std::mutex mutex_;               ///< Mutex protecting allocate/deallocate operations
+        std::mutex mutex_;                       ///< Mutex protecting allocate/deallocate operations
         std::size_t block_size_;                 ///< Requested size of each block
         std::size_t block_stride_;               ///< Padded distance between blocks
         std::size_t alignment_;                  ///< Guaranteed block alignment
         std::size_t block_count_;                ///< Total number of blocks
-        std::atomic<std::size_t> allocated_count_; ///< Current allocation count
+        std::atomic<std::size_t> allocated_count_; ///< Mutex-serialised writes and atomic statistics reads
         detail::AlignedMemory memory_;           ///< Owned backing memory
-        std::atomic<void*> free_list_;          ///< Head of intrusive free list
+        void* free_list_;                        ///< Head of intrusive free list, protected by mutex_
     };
 } // namespace fast_alloc
