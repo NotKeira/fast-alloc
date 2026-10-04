@@ -119,7 +119,9 @@ access to GitHub. The library target is `fast_alloc`; the executable targets are
 `alloc_tests` and `alloc_benchmarks`.
 
 Non-MSVC Release builds use `-O3 -march=native`, so their generated code depends
-on the build machine's CPU.
+on the build machine's CPU. Warning and optimisation flags apply only to this
+project's targets. Release flags follow the selected configuration with both
+single-configuration and multi-configuration generators.
 
 ### Windows (MSVC, Visual Studio)
 
@@ -149,6 +151,22 @@ cmake -S . -B build/library -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_TESTS=OFF -DBUILD_BENCHMARKS=OFF
 cmake --build build/library --config Release
 ```
+
+### Using the Library from Another CMake Project
+
+With this repository checked out in a `fast-alloc` subdirectory:
+
+```cmake
+set(BUILD_TESTS OFF CACHE BOOL "Build unit tests")
+set(BUILD_BENCHMARKS OFF CACHE BOOL "Build benchmarks")
+add_subdirectory(fast-alloc)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE fast_alloc)
+```
+
+The `fast_alloc` target supplies its header path, C++20 requirement and threading
+dependency to consumers. Include headers such as `"pool_allocator.h"` directly.
 
 ### With Sanitisers (Linux, Clang)
 

@@ -1,29 +1,33 @@
 cmake_minimum_required(VERSION 3.20)
 project(fast_alloc VERSION 1.1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-if (MSVC)
-    add_compile_options(/W4 /WX)
-else ()
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif ()
 
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
+function(fast_alloc_configure_target target)
+    set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
+
     if (MSVC)
-        add_compile_options(/O2 /GL)
-        add_link_options(/LTCG)
+        target_compile_options(${target} PRIVATE
+                /W4 /WX
+                "$<$<CONFIG:Release>:/O2>"
+                "$<$<CONFIG:Release>:/GL>"
+        )
+        target_link_options(${target} PRIVATE "$<$<CONFIG:Release>:/LTCG>")
     else ()
-        add_compile_options(-O3 -march=native)
+        target_compile_options(${target} PRIVATE
+                -Wall -Wextra -Wpedantic -Werror
+                "$<$<CONFIG:Release>:-O3>"
+                "$<$<CONFIG:Release>:-march=native>"
+        )
     endif ()
-endif ()
+endfunction()
 
 option(BUILD_TESTS "Build unit tests" ON)
 option(BUILD_BENCHMARKS "Build benchmarks" ON)
+
+find_package(Threads REQUIRED)
 
 # Main library
 add_library(fast_alloc STATIC
@@ -35,8 +39,15 @@ add_library(fast_alloc STATIC
 )
 
 target_include_directories(fast_alloc PUBLIC
-        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+target_compile_features(fast_alloc PUBLIC cxx_std_20)
+target_link_libraries(fast_alloc PUBLIC Threads::Threads)
+fast_alloc_configure_target(fast_alloc)
+
+if (MSVC)
+    target_link_options(fast_alloc INTERFACE "$<$<CONFIG:Release>:/LTCG>")
+endif ()
 
 # Tests
 if (BUILD_TESTS)
@@ -64,6 +75,7 @@ if (BUILD_TESTS)
             fast_alloc
             Catch2::Catch2WithMain
     )
+    fast_alloc_configure_target(alloc_tests)
 
     include(CTest)
     include(Catch)
@@ -95,4 +107,5 @@ if (BUILD_BENCHMARKS)
             fast_alloc
             benchmark::benchmark
     )
+    fast_alloc_configure_target(alloc_benchmarks)
 endif ()
