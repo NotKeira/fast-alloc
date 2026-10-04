@@ -108,6 +108,17 @@ taskset -c 2 ./build/alloc_benchmarks \
   --benchmark_report_aggregates_only=true
 ```
 
+Threaded benchmarks use Google Benchmark workers that stay alive throughout each
+measurement. Pool workers share one allocator; thread creation, pool construction
+and pointer-buffer setup are outside the timed loop. The threaded `new/delete`
+comparison uses the same worker counts. `MultiThread` performs one allocation/free
+pair per worker iteration, `Contention` performs 100 pairs, and `BulkOperations`
+allocates then frees the selected batch size per worker with four workers.
+`items_per_second` counts successful allocation/free pairs across all workers;
+these benchmarks use wall-clock time (`UseRealTime`). Their names now include
+`threads:2`, `threads:4` or `threads:8`, rather than a thread-count argument.
+The single-thread statistics above are unaffected by this benchmark change.
+
 ## Building
 
 Requires a C++20 compiler, CMake 3.20 or newer, Git and a build tool such as Make,

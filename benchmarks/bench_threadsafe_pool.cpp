@@ -1,7 +1,7 @@
 #include <benchmark/benchmark.h>
 #include "threadsafe_pool_allocator.h"
 #include <vector>
-#include <thread>
+#include <memory>
 
 using namespace fast_alloc;
 
@@ -23,165 +23,152 @@ static void BM_ThreadSafePoolAllocator_SingleThread(benchmark::State& state)
 
 BENCHMARK(BM_ThreadSafePoolAllocator_SingleThread);
 
+namespace
+{
+    // Setup and teardown run once per measurement, outside the worker threads.
+    std::unique_ptr<ThreadSafePoolAllocator> shared_pool;
+
+    void setup_pool(const benchmark::State&)
+    {
+        shared_pool = std::make_unique<ThreadSafePoolAllocator>(64, 10000);
+    }
+
+    void setup_contention_pool(const benchmark::State&)
+    {
+        shared_pool = std::make_unique<ThreadSafePoolAllocator>(64, 1000);
+    }
+
+    void teardown_pool(const benchmark::State&)
+    {
+        shared_pool.reset();
+    }
+
+    void record_pool_operations(benchmark::State& state, const int64_t completed,
+                                const int64_t expected)
+    {
+        state.SetItemsProcessed(completed);
+        if (completed != expected)
+        {
+            state.SkipWithError("Pool exhausted during benchmark");
+        }
+        // Google Benchmark synchronises workers at the end of the timed loop.
+        if (state.thread_index() == 0 && shared_pool->allocated() != 0)
+        {
+            state.SkipWithError("Pool still has outstanding allocations");
+        }
+    }
+}
+
 static void BM_ThreadSafePoolAllocator_MultiThread(benchmark::State& state)
 {
-    constexpr std::size_t block_size = 64;
-    constexpr std::size_t block_count = 10000;
-    ThreadSafePoolAllocator pool(block_size, block_count);
-
-    const auto num_threads = static_cast<std::size_t>(state.range(0));
+    auto& pool = *shared_pool;
+    int64_t completed = 0;
 
     for (auto _ : state)
     {
-        std::vector<std::thread> threads;
-        threads.reserve(num_threads);
-
-        for (std::size_t i = 0; i < num_threads; ++i)
+        void* ptr = pool.allocate();
+        benchmark::DoNotOptimize(ptr);
+        if (ptr)
         {
-            threads.emplace_back([&pool]()
-            {
-                void* ptr = pool.allocate();
-                benchmark::DoNotOptimize(ptr);
-                if (ptr) pool.deallocate(ptr);
-            });
-        }
-
-        for (auto& thread : threads)
-        {
-            thread.join();
+            pool.deallocate(ptr);
+            ++completed;
         }
     }
 
-    state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * num_threads));
+    record_pool_operations(state, completed, state.iterations());
 }
 
 BENCHMARK(BM_ThreadSafePoolAllocator_MultiThread)
-    ->Arg(2)
-    ->Arg(4)
-    ->Arg(8)
+    ->Threads(2)
+    ->Threads(4)
+    ->Threads(8)
+    ->Setup(setup_pool)
+    ->Teardown(teardown_pool)
     ->UseRealTime();
 
 static void BM_ThreadSafePoolAllocator_Contention(benchmark::State& state)
 {
-    constexpr std::size_t block_size = 64;
-    constexpr std::size_t block_count = 1000;
-    ThreadSafePoolAllocator pool(block_size, block_count);
-
-    const auto num_threads = static_cast<std::size_t>(state.range(0));
+    auto& pool = *shared_pool;
+    constexpr int operations = 100;
+    int64_t completed = 0;
 
     for (auto _ : state)
     {
-        std::vector<std::thread> threads;
-        threads.reserve(num_threads);
-
-        for (std::size_t i = 0; i < num_threads; ++i)
+        for (int j = 0; j < operations; ++j)
         {
-            threads.emplace_back([&pool]()
+            void* ptr = pool.allocate();
+            benchmark::DoNotOptimize(ptr);
+            if (ptr)
             {
-                constexpr int operations = 100;
-                for (int j = 0; j < operations; ++j)
-                {
-                    void* ptr = pool.allocate();
-                    if (ptr) pool.deallocate(ptr);
-                }
-            });
-        }
-
-        for (auto& thread : threads)
-        {
-            thread.join();
+                pool.deallocate(ptr);
+                ++completed;
+            }
         }
     }
 
-    state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * num_threads * 100));
+    record_pool_operations(state, completed, state.iterations() * operations);
 }
 
 BENCHMARK(BM_ThreadSafePoolAllocator_Contention)
-    ->Arg(2)
-    ->Arg(4)
-    ->Arg(8)
+    ->Threads(2)
+    ->Threads(4)
+    ->Threads(8)
+    ->Setup(setup_contention_pool)
+    ->Teardown(teardown_pool)
     ->UseRealTime();
 
 static void BM_NewDelete_MultiThread(benchmark::State& state)
 {
-    const auto num_threads = static_cast<std::size_t>(state.range(0));
-
     for (auto _ : state)
     {
-        std::vector<std::thread> threads;
-        threads.reserve(num_threads);
-
-        for (std::size_t i = 0; i < num_threads; ++i)
-        {
-            threads.emplace_back([]()
-            {
-                constexpr std::size_t block_size = 64;
-                void* ptr = operator new(block_size);
-                benchmark::DoNotOptimize(ptr);
-                operator delete(ptr);
-            });
-        }
-
-        for (auto& thread : threads)
-        {
-            thread.join();
-        }
+        constexpr std::size_t block_size = 64;
+        void* ptr = operator new(block_size);
+        benchmark::DoNotOptimize(ptr);
+        operator delete(ptr);
     }
 
-    state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * num_threads));
+    state.SetItemsProcessed(state.iterations());
 }
 
 BENCHMARK(BM_NewDelete_MultiThread)
-    ->Arg(2)
-    ->Arg(4)
-    ->Arg(8)
+    ->Threads(2)
+    ->Threads(4)
+    ->Threads(8)
     ->UseRealTime();
 
 static void BM_ThreadSafePoolAllocator_BulkOperations(benchmark::State& state)
 {
-    constexpr std::size_t block_size = 64;
-    constexpr std::size_t block_count = 10000;
-    ThreadSafePoolAllocator pool(block_size, block_count);
-
+    auto& pool = *shared_pool;
     const auto operations_per_thread = static_cast<std::size_t>(state.range(0));
-    constexpr std::size_t num_threads = 4;
+    std::vector<void*> ptrs(operations_per_thread);
+    int64_t completed = 0;
 
     for (auto _ : state)
     {
-        std::vector<std::thread> threads;
-        threads.reserve(num_threads);
-
-        for (std::size_t i = 0; i < num_threads; ++i)
+        for (auto& ptr : ptrs)
         {
-            threads.emplace_back([&pool, operations_per_thread]()
-            {
-                std::vector<void*> ptrs;
-                ptrs.reserve(operations_per_thread);
-
-                for (std::size_t j = 0; j < operations_per_thread; ++j)
-                {
-                    void* ptr = pool.allocate();
-                    if (ptr) ptrs.push_back(ptr);
-                }
-
-                for (void* ptr : ptrs)
-                {
-                    pool.deallocate(ptr);
-                }
-            });
+            ptr = pool.allocate();
+            benchmark::DoNotOptimize(ptr);
         }
 
-        for (auto& thread : threads)
+        for (void* ptr : ptrs)
         {
-            thread.join();
+            if (ptr)
+            {
+                pool.deallocate(ptr);
+                ++completed;
+            }
         }
     }
 
-    state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * num_threads * operations_per_thread));
+    record_pool_operations(state, completed, state.iterations() * state.range(0));
 }
 
 BENCHMARK(BM_ThreadSafePoolAllocator_BulkOperations)
     ->Arg(100)
     ->Arg(500)
     ->Arg(1000)
+    ->Threads(4)
+    ->Setup(setup_pool)
+    ->Teardown(teardown_pool)
     ->UseRealTime();
