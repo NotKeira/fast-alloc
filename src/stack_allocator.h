@@ -29,7 +29,7 @@ namespace fast_alloc
          * @brief Construct a stack allocator.
          * 
          * @param size Total size in bytes of the stack memory
-         * @throws assert if size == 0
+         * @throws std::invalid_argument if size == 0
          * @throws std::bad_alloc if backing size rounding overflows or allocation fails
          * @note Backing memory padding does not increase the requested capacity.
          */
@@ -47,9 +47,10 @@ namespace fast_alloc
         /**
          * @brief Allocate memory from the stack.
          * 
-         * @param size Number of bytes to allocate
-         * @param alignment Memory alignment requirement (default: alignof(std::max_align_t))
+         * @param size Number of bytes to allocate (zero is permitted)
+         * @param alignment Non-zero power-of-two alignment (default: alignof(std::max_align_t))
          * @return Pointer to allocated memory, or nullptr if insufficient space
+         * @throws std::invalid_argument if alignment is zero or not a power of two
          * @note Complexity: O(1) - pointer arithmetic only
          * @note Failed allocations leave the allocator unchanged.
          * 

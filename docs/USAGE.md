@@ -10,6 +10,7 @@ This guide provides comprehensive examples and best practices for using fast-all
 - [Free List Allocator](#free-list-allocator)
 - [Best Practices](#best-practices)
 - [Common Patterns](#common-patterns)
+- [Input Validation](#input-validation)
 
 ## Pool Allocator
 
@@ -501,6 +502,24 @@ public:
 4. **Profile**: Measure actual performance impact in your use case
 5. **Alignment**: Use appropriate alignment for SIMD and cache optimization
 
+## Input Validation
+
+Invalid constructor parameters and allocation requests throw `std::invalid_argument`
+in both Debug and Release builds:
+
+- Both pools require blocks of at least `sizeof(void*)` and a positive block count.
+- Stack capacity must be positive; free-list capacity must exceed its internal
+  free-block metadata size.
+- Free-list strategies must be `FirstFit` or `BestFit`.
+- Alignments must be non-zero powers of two. Pool alignments below `alignof(void*)`
+  are raised to that minimum.
+- Free-list allocation sizes must be positive. Stack zero-byte requests are permitted.
+
+Rejected requests leave existing allocations and allocator accounting unchanged,
+even if the allocator is exhausted. Valid requests that cannot fit return
+`nullptr`; constructors throw `std::bad_alloc` for backing-size overflow or failed
+backing allocation.
+
 ## Debugging
 
 Enable assertions in debug builds to catch common errors:
@@ -509,7 +528,6 @@ Enable assertions in debug builds to catch common errors:
 // These will assert in debug builds:
 pool.deallocate(invalid_ptr);  // Pointer not from this pool
 stack.reset(invalid_marker);   // Invalid marker
-allocator.allocate(0);         // Zero-size allocation
 ```
 
 Build with sanitizers to catch memory issues:

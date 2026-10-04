@@ -44,6 +44,30 @@ TEST_CASE("PoolAllocator basic allocation", "[pool]")
     }
 }
 
+TEST_CASE("PoolAllocator rejects invalid dimensions", "[pool][validation]")
+{
+    SECTION("Undersized blocks")
+    {
+        const auto size = GENERATE(std::size_t{0}, std::size_t{1}, sizeof(void*) - 1);
+        REQUIRE_THROWS_AS(PoolAllocator(size, 1), std::invalid_argument);
+    }
+
+    SECTION("Empty pool")
+    {
+        REQUIRE_THROWS_AS(PoolAllocator(sizeof(void*), 0), std::invalid_argument);
+    }
+
+    SECTION("Minimum block size remains usable")
+    {
+        PoolAllocator pool(sizeof(void*), 1);
+        void* ptr = pool.allocate();
+        REQUIRE(ptr != nullptr);
+        REQUIRE(pool.allocate() == nullptr);
+        pool.deallocate(ptr);
+        REQUIRE(pool.allocate() == ptr);
+    }
+}
+
 TEST_CASE("PoolAllocator capacity", "[pool]")
 {
     PoolAllocator pool(64, 5);

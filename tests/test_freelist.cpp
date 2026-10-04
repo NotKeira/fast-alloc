@@ -5,6 +5,7 @@
 #include <array>
 #include <limits>
 #include <new>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -41,6 +42,89 @@ TEST_CASE("FreeListAllocator basic allocation", "[freelist]")
         allocator.deallocate(ptr3);
         REQUIRE(allocator.num_allocations() == 0);
     }
+}
+
+TEST_CASE("FreeListAllocator rejects undersized capacity", "[freelist][validation]")
+{
+    constexpr std::size_t metadata_size = sizeof(std::size_t) + sizeof(void*);
+    const auto size = GENERATE_COPY(std::size_t{0}, std::size_t{1}, metadata_size);
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    REQUIRE_THROWS_AS(FreeListAllocator(size, strategy), std::invalid_argument);
+
+    FreeListAllocator allocator(metadata_size + 1, strategy);
+    void* ptr = allocator.allocate(1, 1);
+    REQUIRE(ptr != nullptr);
+    REQUIRE(allocator.available() == 0);
+    allocator.deallocate(ptr);
+    REQUIRE(allocator.available() == allocator.capacity());
+}
+
+TEST_CASE("FreeListAllocator rejects unknown strategy", "[freelist][validation]")
+{
+    const auto strategy = GENERATE(static_cast<FreeListStrategy>(-1), static_cast<FreeListStrategy>(2));
+    REQUIRE_THROWS_AS(FreeListAllocator(1024, strategy), std::invalid_argument);
+}
+
+TEST_CASE("FreeListAllocator rejects zero-sized requests", "[freelist][validation]")
+{
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    FreeListAllocator allocator(1024, strategy);
+    auto* first = static_cast<std::byte*>(allocator.allocate(16));
+    REQUIRE(first != nullptr);
+    std::fill_n(first, 16, std::byte{0x5a});
+    const std::size_t used = allocator.used();
+    const std::size_t available = allocator.available();
+    const std::size_t allocations = allocator.num_allocations();
+
+    REQUIRE_THROWS_AS(allocator.allocate(0), std::invalid_argument);
+    REQUIRE(allocator.used() == used);
+    REQUIRE(allocator.available() == available);
+    REQUIRE(allocator.num_allocations() == allocations);
+    REQUIRE(std::all_of(first, first + 16, [](const std::byte byte)
+    {
+        return byte == std::byte{0x5a};
+    }));
+    allocator.deallocate(first);
+    REQUIRE(allocator.allocate(16) == first);
+}
+
+TEST_CASE("FreeListAllocator rejects invalid request alignment", "[freelist][validation]")
+{
+    const auto alignment = GENERATE(std::size_t{0}, std::size_t{3}, std::size_t{6},
+        std::numeric_limits<std::size_t>::max());
+    const auto size = GENERATE(std::size_t{1}, std::size_t{1025});
+    const auto strategy = GENERATE(FreeListStrategy::FirstFit, FreeListStrategy::BestFit);
+    const bool exhausted = GENERATE(false, true);
+    FreeListAllocator allocator(1024, strategy);
+    auto* first = static_cast<std::byte*>(allocator.allocate(16));
+    REQUIRE(first != nullptr);
+    std::fill_n(first, 16, std::byte{0x5a});
+    void* remainder = nullptr;
+    if (exhausted)
+    {
+        const std::size_t overhead = allocator.used() - 16;
+        remainder = allocator.allocate(allocator.available() - overhead);
+        REQUIRE(remainder != nullptr);
+        REQUIRE(allocator.available() == 0);
+    }
+    const std::size_t used = allocator.used();
+    const std::size_t available = allocator.available();
+    const std::size_t allocations = allocator.num_allocations();
+
+    REQUIRE_THROWS_AS(allocator.allocate(size, alignment), std::invalid_argument);
+    REQUIRE(allocator.used() == used);
+    REQUIRE(allocator.available() == available);
+    REQUIRE(allocator.num_allocations() == allocations);
+    REQUIRE(std::all_of(first, first + 16, [](const std::byte byte)
+    {
+        return byte == std::byte{0x5a};
+    }));
+    void* second = allocator.allocate(16);
+    REQUIRE((second == nullptr) == exhausted);
+    allocator.deallocate(second);
+    allocator.deallocate(remainder);
+    allocator.deallocate(first);
+    REQUIRE(allocator.available() == allocator.capacity());
 }
 
 TEST_CASE("FreeListAllocator variable sizes", "[freelist]")

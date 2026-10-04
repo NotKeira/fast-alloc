@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <limits>
+#include <stdexcept>
 #include <utility>
 
 namespace fast_alloc
@@ -11,7 +12,10 @@ namespace fast_alloc
           , memory_(nullptr)
           , current_(nullptr)
     {
-        assert(size > 0 && "Stack size must be greater than zero");
+        if (size == 0)
+        {
+            throw std::invalid_argument("Stack size must be greater than zero");
+        }
 
         memory_ = detail::allocate_aligned_memory(size_, alignof(std::max_align_t));
         current_ = memory_.get();
@@ -45,6 +49,11 @@ namespace fast_alloc
     void* StackAllocator::allocate(const std::size_t size, const std::size_t alignment)
     {
         assert(memory_ && "Allocator not initialised");
+
+        if (alignment == 0 || (alignment & (alignment - 1)) != 0)
+        {
+            throw std::invalid_argument("Alignment must be a non-zero power of two");
+        }
 
         const std::size_t remaining = available();
         if (size > remaining)
@@ -120,7 +129,8 @@ namespace fast_alloc
 
     std::size_t StackAllocator::align_forward(std::size_t address, const std::size_t alignment) noexcept
     {
-        assert((alignment & (alignment - 1)) == 0 && "Alignment must be power of 2");
+        assert(alignment != 0 && (alignment & (alignment - 1)) == 0
+            && "Alignment must be a non-zero power of two");
 
         if (const std::size_t modulo = address & (alignment - 1); modulo != 0)
         {

@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <limits>
+#include <stdexcept>
 #include <utility>
 
 namespace fast_alloc
@@ -14,7 +15,14 @@ namespace fast_alloc
           , memory_(nullptr)
           , free_blocks_(nullptr)
     {
-        assert(size > sizeof(FreeBlock) && "Size must be larger than FreeBlock");
+        if (size <= sizeof(FreeBlock))
+        {
+            throw std::invalid_argument("Size must be larger than FreeBlock");
+        }
+        if (strategy != FreeListStrategy::FirstFit && strategy != FreeListStrategy::BestFit)
+        {
+            throw std::invalid_argument("Unknown free-list allocation strategy");
+        }
 
         memory_ = detail::allocate_aligned_memory(size_, alignof(std::max_align_t));
 
@@ -61,8 +69,16 @@ namespace fast_alloc
 
     void* FreeListAllocator::allocate(const std::size_t size, const std::size_t alignment)
     {
-        assert(size > 0 && "Allocation size must be greater than zero");
         assert(memory_ && "Allocator not initialised");
+
+        if (size == 0)
+        {
+            throw std::invalid_argument("Allocation size must be greater than zero");
+        }
+        if (alignment == 0 || (alignment & (alignment - 1)) != 0)
+        {
+            throw std::invalid_argument("Alignment must be a non-zero power of two");
+        }
 
         if (size > size_)
         {
@@ -275,7 +291,8 @@ namespace fast_alloc
         std::size_t& adjustment
     ) noexcept
     {
-        assert((alignment & (alignment - 1)) == 0 && "Alignment must be power of 2");
+        assert(alignment != 0 && (alignment & (alignment - 1)) == 0
+            && "Alignment must be a non-zero power of two");
 
         adjustment = 0;
         if (header_size > std::numeric_limits<std::size_t>::max() - address)

@@ -33,6 +33,25 @@ changing allocator state. Both pool constructors check stride rounding and
 `block_stride * block_count` before allocating backing memory and throw
 `std::bad_alloc` if either size cannot be represented by `std::size_t`.
 
+## Input Validation
+
+Public constructor and allocation parameters are validated in both Debug and
+Release builds. Invalid inputs throw `std::invalid_argument` before backing
+allocation or changes to allocator state:
+
+- Pool block sizes must be at least `sizeof(void*)`, and block counts must be positive.
+- Stack capacity must be positive; free-list capacity must exceed `sizeof(FreeBlock)`.
+- Free-list strategies must be `FirstFit` or `BestFit`.
+- Pool and request alignments must be non-zero powers of two.
+- Free-list requests must have a positive size. Stack zero-byte requests remain supported.
+
+Request validation precedes capacity checks, so invalid parameters still throw
+when a request is too large or the allocator is exhausted. Valid requests that
+cannot fit return `nullptr`; backing-size overflow and backing allocation failure
+throw `std::bad_alloc`. Pointer ownership, double-free prevention and stack marker
+lifetimes remain caller responsibilities, with Debug assertions for existing
+pointer and marker checks.
+
 ## Backing Memory
 
 All four allocators use a shared internal helper to allocate and own their

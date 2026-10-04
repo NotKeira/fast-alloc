@@ -30,8 +30,8 @@ namespace fast_alloc
          * @param block_count Number of blocks to allocate
          * @param alignment Required block alignment (non-zero power of two).
          *        Defaults to alignof(std::max_align_t); raised to alignof(void*) if smaller.
-         * @throws assert if block_size < sizeof(void*) or block_count == 0
-         * @throws std::invalid_argument if alignment is zero or not a power of two
+         * @throws std::invalid_argument if block_size < sizeof(void*), block_count == 0,
+         *         or alignment is zero or not a power of two
          * @throws std::bad_alloc if the padded stride or total pool size overflows, or backing allocation fails
          */
         PoolAllocator(std::size_t block_size, std::size_t block_count,

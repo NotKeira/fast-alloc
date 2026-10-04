@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <limits>
 #include <new>
+#include <stdexcept>
 #include <utility>
 
 using namespace fast_alloc;
@@ -31,6 +32,42 @@ TEST_CASE("StackAllocator basic allocation", "[stack]")
         REQUIRE(ptr3 != nullptr);
         REQUIRE(stack.used() >= 64 + 128 + 32);
     }
+}
+
+TEST_CASE("StackAllocator rejects zero capacity", "[stack][validation]")
+{
+    REQUIRE_THROWS_AS(StackAllocator(0), std::invalid_argument);
+
+    StackAllocator stack(1);
+    REQUIRE(stack.allocate(1, 1) != nullptr);
+    REQUIRE(stack.available() == 0);
+}
+
+TEST_CASE("StackAllocator rejects invalid request alignment", "[stack][validation]")
+{
+    const auto alignment = GENERATE(std::size_t{0}, std::size_t{3}, std::size_t{6},
+        std::numeric_limits<std::size_t>::max());
+    const auto size = GENERATE(std::size_t{0}, std::size_t{1}, std::size_t{1025});
+    const bool exhausted = GENERATE(false, true);
+    StackAllocator stack(1024);
+    auto* first = static_cast<std::byte*>(stack.allocate(1, 1));
+    REQUIRE(first != nullptr);
+    *first = std::byte{0x5a};
+    if (exhausted)
+    {
+        REQUIRE(stack.allocate(stack.available(), 1) != nullptr);
+    }
+    void* marker = stack.get_marker();
+    const std::size_t used = stack.used();
+    const std::size_t available = stack.available();
+
+    REQUIRE_THROWS_AS(stack.allocate(size, alignment), std::invalid_argument);
+    REQUIRE(stack.get_marker() == marker);
+    REQUIRE(stack.used() == used);
+    REQUIRE(stack.available() == available);
+    REQUIRE(*first == std::byte{0x5a});
+    REQUIRE(stack.allocate(available, 1) == marker);
+    REQUIRE(stack.available() == 0);
 }
 
 TEST_CASE("StackAllocator reset", "[stack]")

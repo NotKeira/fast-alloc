@@ -19,8 +19,14 @@ namespace fast_alloc
           , memory_(nullptr)
           , free_list_(nullptr)
     {
-        assert(block_size >= sizeof(void*) && "Block size must be at least pointer size");
-        assert(block_count > 0 && "Block count must be greater than zero");
+        if (block_size < sizeof(void*))
+        {
+            throw std::invalid_argument("Block size must be at least pointer size");
+        }
+        if (block_count == 0)
+        {
+            throw std::invalid_argument("Block count must be greater than zero");
+        }
 
         if (alignment_ == 0 || (alignment_ & (alignment_ - 1)) != 0)
         {

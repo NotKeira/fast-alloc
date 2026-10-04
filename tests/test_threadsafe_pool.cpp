@@ -46,6 +46,30 @@ TEST_CASE("ThreadSafePoolAllocator basic allocation", "[threadsafe_pool]")
     }
 }
 
+TEST_CASE("ThreadSafePoolAllocator rejects invalid dimensions", "[threadsafe_pool][validation]")
+{
+    SECTION("Undersized blocks")
+    {
+        const auto size = GENERATE(std::size_t{0}, std::size_t{1}, sizeof(void*) - 1);
+        REQUIRE_THROWS_AS(ThreadSafePoolAllocator(size, 1), std::invalid_argument);
+    }
+
+    SECTION("Empty pool")
+    {
+        REQUIRE_THROWS_AS(ThreadSafePoolAllocator(sizeof(void*), 0), std::invalid_argument);
+    }
+
+    SECTION("Minimum block size remains usable")
+    {
+        ThreadSafePoolAllocator pool(sizeof(void*), 1);
+        void* ptr = pool.allocate();
+        REQUIRE(ptr != nullptr);
+        REQUIRE(pool.allocate() == nullptr);
+        pool.deallocate(ptr);
+        REQUIRE(pool.allocate() == ptr);
+    }
+}
+
 TEST_CASE("ThreadSafePoolAllocator capacity", "[threadsafe_pool]")
 {
     ThreadSafePoolAllocator pool(64, 5);

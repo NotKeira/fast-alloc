@@ -235,9 +235,11 @@ returning a block or resetting the stack does not run object destructors. Return
 each live block to its owning allocator at most once. Pool and free-list
 `deallocate(nullptr)` calls are safely ignored.
 
-Constructor size preconditions are checked with Debug assertions and must also
-be respected in Release builds. Stack and free-list request alignments must be
-non-zero powers of two; free-list request sizes must be positive.
+Invalid constructor sizes, unknown free-list strategies, zero-byte free-list
+requests and alignments that are zero or not powers of two throw
+`std::invalid_argument` in both Debug and Release builds. Stack zero-byte requests
+remain supported. Pointer ownership and stack marker validity remain caller
+responsibilities, with the existing Debug assertions retained.
 
 ### Quick Start
 
@@ -369,6 +371,7 @@ The Catch2 test suite covers:
 - Unit tests for all allocators
 - Move construction and assignment for movable allocators
 - Exhaustion, nullptr handling and arithmetic overflow
+- Invalid constructor parameters and allocation requests in Debug and Release
 - Default and explicit alignment, including odd-sized pool blocks
 - Arbitrary byte capacities and free-list split/coalescence accounting
 - Concurrent stress tests for thread-safe variants

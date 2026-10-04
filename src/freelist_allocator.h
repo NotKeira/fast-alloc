@@ -41,7 +41,7 @@ namespace fast_alloc
          * 
          * @param size Total size in bytes of memory to manage
          * @param strategy Allocation strategy (FirstFit or BestFit)
-         * @throws assert if size <= sizeof(FreeBlock)
+         * @throws std::invalid_argument if size <= sizeof(FreeBlock) or strategy is unknown
          * @throws std::bad_alloc if backing size rounding overflows or allocation fails
          * @note Backing memory padding does not increase the requested capacity.
          */
@@ -60,8 +60,9 @@ namespace fast_alloc
          * @brief Allocate memory block.
          * 
          * @param size Number of bytes to allocate (must be > 0)
-         * @param alignment Memory alignment requirement (default: alignof(std::max_align_t))
+         * @param alignment Non-zero power-of-two alignment (default: alignof(std::max_align_t))
          * @return Pointer to allocated memory, or nullptr if no suitable block found
+         * @throws std::invalid_argument if size == 0, or alignment is zero or not a power of two
          * @note Complexity: O(n) where n is number of free blocks
          * @note Failed allocations leave the allocator unchanged.
          * 
